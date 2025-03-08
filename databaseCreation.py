@@ -2,8 +2,13 @@ from pymongo import MongoClient
 from datetime import datetime
 
 def setup_primary_database(db):
-    # Insert sample data into the persons collection.
-    # Each donor now includes a "location" field (hospital name).
+    """
+    Sets up the primary database with sample data.
+    Each donor document includes separate 'hospital' and 'city' fields.
+    Also sets up sample locations, bloodBags, and globalInventory collections.
+    """
+    # Clear and insert persons data (donors, patients, nurses)
+    db.persons.drop()
     persons_data = [
         {
             "pid": "P1234567",
@@ -11,7 +16,8 @@ def setup_primary_database(db):
             "lastName": "Doe",
             "age": 35,
             "role": "donor",
-            "location": "General Hospital",
+            "hospital": "General Hospital",
+            "city": "Sample City",
             "donorDetails": {
                 "bloodType": "O+",
                 "weightLBS": 180,
@@ -26,7 +32,8 @@ def setup_primary_database(db):
             "lastName": "Smith",
             "age": 28,
             "role": "patient",
-            "location": "General Hospital",
+            "hospital": "General Hospital",
+            "city": "Sample City",
             "patientDetails": {
                 "bloodType": "A-",
                 "needStatus": "high",
@@ -39,19 +46,21 @@ def setup_primary_database(db):
             "lastName": "Brown",
             "age": 40,
             "role": "nurse",
-            "location": "General Hospital",
+            "hospital": "General Hospital",
+            "city": "Sample City",
             "nurseDetails": {
                 "yearsExperienced": 15
             }
         },
-        # Additional donor records for aggregation demonstration.
+        # Additional donor records
         {
             "pid": "P1111111",
             "firstName": "Bob",
             "lastName": "Taylor",
             "age": 30,
             "role": "donor",
-            "location": "Community Health Center",
+            "hospital": "Community Health Center",
+            "city": "Other City",
             "donorDetails": {
                 "bloodType": "A+",
                 "weightLBS": 170,
@@ -66,7 +75,8 @@ def setup_primary_database(db):
             "lastName": "Johnson",
             "age": 45,
             "role": "donor",
-            "location": "General Hospital",
+            "hospital": "General Hospital",
+            "city": "Sample City",
             "donorDetails": {
                 "bloodType": "O+",
                 "weightLBS": 160,
@@ -76,50 +86,11 @@ def setup_primary_database(db):
             }
         }
     ]
-    db.persons.drop()  # Clear existing data for a fresh start
     db.persons.insert_many(persons_data)
     
-    # Insert sample data into the donationTypes collection.
-    donation_types_data = [
-        {"_id": "Whole Blood", "frequencyDays": 56},
-        {"_id": "Plasma", "frequencyDays": 28},
-        {"_id": "Platelets", "frequencyDays": 7}
-    ]
-    db.donationTypes.drop()
-    db.donationTypes.insert_many(donation_types_data)
-    
-    # Insert a sample donation document.
-    donation_data = {
-        "donationId": "D0001",
-        "donorId": "P1234567",  # Reference to a donor in persons
-        "nurseId": "P9999999",  # Reference to a nurse in persons
-        "donationDate": datetime(2025, 3, 1),
-        "preExam": {
-            "hemoglobin": 13.5,
-            "temperature": 98.6,
-            "bloodPressure": "120/80",
-            "pulseRate": 70
-        },
-        "amountDonatedCC": 450,
-        "donationType": "Whole Blood"
-    }
-    db.donations.drop()
-    db.donations.insert_one(donation_data)
-    
-    # Insert a sample bloodBags document.
-    blood_bags_data = {
-        "bbid": "BB0001",
-        "donationType": "Whole Blood",
-        "quantityCC": 450,
-        "bloodType": "O+",
-        "available": True
-    }
-    db.bloodBags.drop()
-    db.bloodBags.insert_one(blood_bags_data)
-    
-    # Insert sample location documents.
-    # One for General Hospital and one for Community Health Center.
-    location_data = [
+    # Setup locations collection
+    db.locations.drop()
+    locations_data = [
         {
             "lid": "L0001",
             "name": "General Hospital",
@@ -133,95 +104,230 @@ def setup_primary_database(db):
             "locationCode": "CHC"
         }
     ]
-    db.locations.drop()
-    db.locations.insert_many(location_data)
+    db.locations.insert_many(locations_data)
     
-    # Insert a sample globalInventory document.
-    global_inventory_data = {
-        "bbid": "BB0001",  # Reference to a blood bag in bloodBags
-        "lid": "L0001",    # Reference to a location in locations
-        "available": True
-    }
+    # Setup bloodBags collection (each blood bag has a quantity in CC)
+    db.bloodBags.drop()
+    blood_bags_data = [
+        {
+            "bbid": "BB0001",
+            "donationType": "Whole Blood",
+            "quantityCC": 450,
+            "bloodType": "O+",
+            "available": True
+        },
+        {
+            "bbid": "BB0002",
+            "donationType": "Whole Blood",
+            "quantityCC": 300,
+            "bloodType": "A+",
+            "available": True
+        }
+    ]
+    db.bloodBags.insert_many(blood_bags_data)
+    
+    # Setup globalInventory collection to map blood bags to locations
     db.globalInventory.drop()
-    db.globalInventory.insert_one(global_inventory_data)
-    
-    # Insert a sample request document.
-    request_data = {
-        "rqid": "RQ0001",
-        "lid": "L0001",
-        "bloodTypeRequested": "O+",
-        "dateRequested": datetime(2025, 3, 5),
-        "quantityRequestedPints": 2
-    }
-    db.requests.drop()
-    db.requests.insert_one(request_data)
+    global_inventory_data = [
+        {
+            "bbid": "BB0001",
+            "lid": "L0001",
+            "available": True
+        },
+        {
+            "bbid": "BB0002",
+            "lid": "L0002",
+            "available": True
+        }
+    ]
+    db.globalInventory.insert_many(global_inventory_data)
 
 def aggregate_donor_data_by_location(db):
-    # Aggregation pipeline to group donors by location and blood type,
-    # then lookup additional details (city and hospital name) from the locations collection.
+    """
+    Aggregates donor data from the persons collection.
+    Groups donors by 'hospital', 'city', and blood type,
+    producing donor counts and default surplus/shortage flags.
+    """
     pipeline = [
         {"$match": {"role": "donor"}},
         {"$group": {
             "_id": {
-                "location": "$location",
+                "hospital": "$hospital",
+                "city": "$city",
                 "bloodType": "$donorDetails.bloodType"
             },
             "donorCount": {"$sum": 1}
         }},
         {"$group": {
-            "_id": "$_id.location",
-            "bloodTypeStats": {
-                "$push": {
-                    "bloodType": "$_id.bloodType",
-                    "donorCount": "$donorCount",
-                    "surplus": False,
-                    "shortage": False
-                }
-            }
+            "_id": {
+                "hospital": "$_id.hospital",
+                "city": "$_id.city"
+            },
+            "bloodTypeStats": {"$push": {
+                "bloodType": "$_id.bloodType",
+                "donorCount": "$donorCount",
+                "surplus": False,
+                "shortage": False
+            }}
         }},
         {"$project": {
             "_id": 0,
-            "location": "$_id",
+            "hospital": "$_id.hospital",
+            "city": "$_id.city",
             "bloodTypeStats": 1
-        }},
-        # Lookup location details from the locations collection.
-        {"$lookup": {
-             "from": "locations",
-             "localField": "location",
-             "foreignField": "name",
-             "as": "locationInfo"
-        }},
-        {"$unwind": "$locationInfo"},
-        {"$project": {
-             "location": 1,
-             "hospital": "$locationInfo.name",
-             "city": "$locationInfo.city",
-             "bloodTypeStats": 1
         }}
     ]
     return list(db.persons.aggregate(pipeline))
 
-def create_secondary_collection(db, aggregated_data):'
-    db.donorStats.drop() 
-    db.donorStats.insert_many(aggregated_data)
+def aggregate_inventory_by_location(db):
+    """
+    Aggregates the blood inventory from the globalInventory collection.
+    Joins bloodBags and locations to sum the total quantity (in CC)
+    available at each hospital (by hospital name and city).
+    """
+    pipeline = [
+        {"$lookup": {
+            "from": "bloodBags",
+            "localField": "bbid",
+            "foreignField": "bbid",
+            "as": "bag"
+        }},
+        {"$unwind": "$bag"},
+        {"$lookup": {
+            "from": "locations",
+            "localField": "lid",
+            "foreignField": "lid",
+            "as": "loc"
+        }},
+        {"$unwind": "$loc"},
+        {"$match": {"available": True}},
+        {"$group": {
+            "_id": {
+                "hospital": "$loc.name",
+                "city": "$loc.city"
+            },
+            "totalBloodCC": {"$sum": "$bag.quantityCC"}
+        }},
+        {"$project": {
+            "_id": 0,
+            "hospital": "$_id.hospital",
+            "city": "$_id.city",
+            "totalBloodCC": 1
+        }}
+    ]
+    return list(db.globalInventory.aggregate(pipeline))
+
+def merge_secondary_data(donor_stats, inventory_stats):
+    """
+    Merges donor statistics and inventory statistics based on hospital and city.
+    Returns a list of documents that include donor stats and total blood inventory.
+    """
+    # Create a lookup dictionary for inventory data keyed by (hospital, city)
+    inv_lookup = {(doc["hospital"], doc["city"]): doc["totalBloodCC"] for doc in inventory_stats}
+    
+    merged = []
+    for stat in donor_stats:
+        key = (stat["hospital"], stat["city"])
+        stat["totalBloodCC"] = inv_lookup.get(key, 0)
+        merged.append(stat)
+    return merged
+
+def create_secondary_collection(db, merged_data):
+    """
+    Creates (or updates) the secondary collection 'donorStats'
+    with merged donor and inventory statistics.
+    """
+    db.donorStats.drop()
+    db.donorStats.insert_many(merged_data)
+
+def update_secondary_data(db):
+    """
+    Re-aggregates donor and inventory data, merges the results,
+    and updates the secondary collection.
+    """
+    donor_stats = aggregate_donor_data_by_location(db)
+    inventory_stats = aggregate_inventory_by_location(db)
+    merged_data = merge_secondary_data(donor_stats, inventory_stats)
+    create_secondary_collection(db, merged_data)
+    print("Secondary collection 'donorStats' updated.")
+
+# Functions to add and remove donors (with secondary data update)
+
+def add_donor(db, donor_data):
+    """
+    Adds a donor to the persons collection.
+    donor_data must include keys: pid, firstName, lastName, age, hospital, city, and donorDetails.
+    """
+    donor_data["role"] = "donor"
+    result = db.persons.insert_one(donor_data)
+    print(f"Donor with pid {donor_data['pid']} added. Inserted ID: {result.inserted_id}")
+
+def remove_donor(db, pid):
+    """
+    Removes a donor (with role 'donor') from the persons collection by pid.
+    """
+    result = db.persons.delete_one({"pid": pid, "role": "donor"})
+    if result.deleted_count > 0:
+        print(f"Donor with pid {pid} removed.")
+    else:
+        print(f"No donor with pid {pid} found.")
+
+def add_donor_and_update(db, donor_data):
+    add_donor(db, donor_data)
+    update_secondary_data(db)
+
+def remove_donor_and_update(db, pid):
+    remove_donor(db, pid)
+    update_secondary_data(db)
+
+def search_secondary(db, hospital, city):
+    """
+    Searches the secondary collection 'donorStats' for a given hospital and city.
+    Returns the matching document.
+    """
+    result = db.donorStats.find_one({"hospital": hospital, "city": city})
+    return result
 
 def main():
+    # Connect to MongoDB (ensure your instance is running)
     client = MongoClient("mongodb://localhost:27017")
-    
     primary_db = client["americanRedCrossDB"]
 
+    # Setup primary database with sample data.
     setup_primary_database(primary_db)
     
-    aggregated_data = aggregate_donor_data_by_location(primary_db)
-    print("Aggregated Donor Data by Location (with City and Hospital):")
-    for doc in aggregated_data:
-        print(doc)
+    # Initial aggregation to build secondary collection.
+    update_secondary_data(primary_db)
     
-    #Secondary database ie the stuff thats used by us the other stuff that we get from the hospital need to be black boxed and encypted
-    donor_stats_db = client["donorStatsDB"]
-    donor_stats_db.donorInventory.drop()
-    donor_stats_db.donorInventory.insert_many(aggregated_data)
-    print("\nSecondary database 'donorStatsDB' with collection 'donorInventory' created.")
+    # Example: Add a new donor and update secondary data.
+    new_donor = {
+        "pid": "P3333333",
+        "firstName": "Derek",
+        "lastName": "Miller",
+        "age": 32,
+        "hospital": "Community Health Center",
+        "city": "Other City",
+        "donorDetails": {
+            "bloodType": "B+",
+            "weightLBS": 175,
+            "heightIN": 72,
+            "gender": "M",
+            "nextSafeDonation": datetime(2025, 8, 15)
+        }
+    }
+    print("\nAdding new donor...")
+    add_donor_and_update(primary_db, new_donor)
+    
+    # Example: Remove an existing donor and update secondary data.
+    print("\nRemoving donor with pid P1111111...")
+    remove_donor_and_update(primary_db, "P1111111")
+    
+    # Example: Search secondary data by hospital and city.
+    hospital_search = "General Hospital"
+    city_search = "Sample City"
+    result = search_secondary(primary_db, hospital_search, city_search)
+    print(f"\nSearch result for {hospital_search} in {city_search}:")
+    print(result)
 
 if __name__ == "__main__":
     main()
