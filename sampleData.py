@@ -3,8 +3,10 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 import random
 
-# Import the necessary functions from your databaseFunctions module.
+# Import the necessary functions from your functions file.
 from hospital_managment import update_secondary_data, update_inventory_flag
+
+#have make each hospital have a password thats needed to add, subtract, or update data
 
 def wipe_database(db_name="americanRedCrossDB"):
     client = MongoClient("mongodb://localhost:27017")
@@ -14,6 +16,7 @@ def wipe_database(db_name="americanRedCrossDB"):
 def generate_sample_hospitals(db):
     """
     Inserts manually defined hospital documents for easier testing.
+    Here we create 5 hospitals.
     """
     hospitals = [
         {
@@ -36,6 +39,20 @@ def generate_sample_hospitals(db):
             "city": "New York, NY",
             "locationCode": "HOSP",
             "coordinates": {"lat": 40.7128, "lon": -74.0060}
+        },
+        {
+            "lid": "L0004",
+            "name": "Regional Medical Center",
+            "city": "Chicago, IL",
+            "locationCode": "HOSP",
+            "coordinates": {"lat": 41.8781, "lon": -87.6298}
+        },
+        {
+            "lid": "L0005",
+            "name": "Health Clinic",
+            "city": "Houston, TX",
+            "locationCode": "HOSP",
+            "coordinates": {"lat": 29.7604, "lon": -95.3698}
         }
     ]
     db.locations.drop()
@@ -44,7 +61,7 @@ def generate_sample_hospitals(db):
 
 def generate_sample_donors(db):
     """
-    Inserts a few manually defined donor documents.
+    Inserts manually defined donor documents.
     """
     donors = [
         {
@@ -110,6 +127,38 @@ def generate_sample_donors(db):
                 "gender": "F",
                 "nextSafeDonation": datetime(2025, 11, 1)
             }
+        },
+        {
+            "pid": "P0000005",
+            "firstName": "Edward",
+            "lastName": "Norton",
+            "age": 50,
+            "role": "donor",
+            "hospital": "Regional Medical Center",
+            "city": "Chicago, IL",
+            "donorDetails": {
+                "bloodType": "O-",
+                "weightLBS": 200,
+                "heightIN": 72,
+                "gender": "M",
+                "nextSafeDonation": datetime(2025, 12, 1)
+            }
+        },
+        {
+            "pid": "P0000006",
+            "firstName": "Fiona",
+            "lastName": "Apple",
+            "age": 33,
+            "role": "donor",
+            "hospital": "Health Clinic",
+            "city": "Houston, TX",
+            "donorDetails": {
+                "bloodType": "AB+",
+                "weightLBS": 140,
+                "heightIN": 63,
+                "gender": "F",
+                "nextSafeDonation": datetime(2025, 7, 1)
+            }
         }
     ]
     db.persons.drop()
@@ -118,8 +167,8 @@ def generate_sample_donors(db):
 
 def generate_sample_inventory(db):
     """
-    Inserts inventory records for every hospital and for every blood type.
-    Each hospital will have one blood bag record per blood type with a fixed quantity.
+    Inserts inventory records for every hospital and every blood type.
+    Each hospital will have one blood bag record per blood type with a fixed quantity (500 CC).
     """
     blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     db.bloodBags.drop()
@@ -137,7 +186,7 @@ def generate_sample_inventory(db):
             bag = {
                 "bbid": bbid,
                 "donationType": "Whole Blood",
-                "quantityCC": 500,  # Fixed quantity for testing
+                "quantityCC": 500,  # Fixed quantity for testing.
                 "bloodType": bt,
                 "available": True
             }
@@ -163,15 +212,19 @@ def generate_all_sample_data():
     generate_sample_donors(db)
     generate_sample_inventory(db)
     print("All sample data generated.")
+    
+    # Update the secondary collection so that every hospital has data for every blood type.
     update_secondary_data(db)
     
-    # Manually update flags to ensure a match:
-    # For hospital "General Hospital 1" in Los Angeles, CA, mark blood type A+ as shortage.
+    # Manually update flags so a match is possible.
+    # For example, mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+,
+    # and "Central Medical Center" in Boston, MA as having a surplus for A+.
     update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True)
-    # For hospital "Central Medical Center" in Boston, MA, mark blood type A+ as surplus.
     update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False)
+    update_inventory_flag(db, "Health Clinic", "Houston, TX", "A+", surplus=True, shortage=False)
+    update_inventory_flag(db, "City Hospital 1", "New York, NY", "A+", surplus=True, shortage=False)
     
-    # Update secondary data again to refresh flag settings.
+    # Refresh secondary data after manual flag updates.
     update_secondary_data(db)
 
 if __name__ == "__main__":
