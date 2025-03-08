@@ -18,13 +18,6 @@ CORS(app)  # Enable CORS for development
 es_client = Elasticsearch("http://localhost:9200")
 
 
-
-app = Flask(__name__)
-CORS(app)  # Enable CORS for development
-
-# In a real application, configure Elasticsearch properly
-es_client = Elasticsearch("http://localhost:9200")  # Adjust if your ES is elsewhere
-
 # Mailchimp Configuration
 mailchimp = Client()
 mailchimp.set_config({
