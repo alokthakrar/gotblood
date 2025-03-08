@@ -14,7 +14,7 @@ from mailchimp_marketing.api_client import ApiClientError
 app = Flask(__name__)
 CORS(app)  # Enable CORS for development
 
-# Elasticsearch setup (as before)
+# Elasticsearch setup 
 es_client = Elasticsearch("http://localhost:9200")
 
 
