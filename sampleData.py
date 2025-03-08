@@ -1,67 +1,79 @@
 # sampleData.py
 from pymongo import MongoClient
-from datetime import datetime, timedelta
+from datetime import datetime
 import random
+import bcrypt
 
-# Import the necessary functions from your functions file.
-from hospital_managment import update_secondary_data, update_inventory_flag
+# Import the necessary functions from your hospital management module.
+from hospital_managment import (
+    update_secondary_data,
+    update_inventory_flag,
+    add_hospital,
+    update_hospital_inventory
+)
 
-#have make each hospital have a password thats needed to add, subtract, or update data
+def hash_password(plain_password):
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
 def wipe_database(db_name="americanRedCrossDB"):
     client = MongoClient("mongodb://localhost:27017")
     client.drop_database(db_name)
-    print(f"Database '{db_name}' has been dropped.")
+    print(f"Database '{db_name}' has been wiped.")
 
 def generate_sample_hospitals(db):
     """
-    Inserts manually defined hospital documents for easier testing.
-    Here we create 5 hospitals.
+    Inserts 5 manually defined hospitals with hashed passwords.
     """
     hospitals = [
         {
             "lid": "L0001",
             "name": "Central Medical Center",
             "city": "Boston, MA",
-            "locationCode": "HOSP",
-            "coordinates": {"lat": 42.3601, "lon": -71.0589}
+            "coordinates": {"lat": 42.3601, "lon": -71.0589},
+            "password": "pass123"
         },
         {
             "lid": "L0002",
             "name": "General Hospital 1",
             "city": "Los Angeles, CA",
-            "locationCode": "HOSP",
-            "coordinates": {"lat": 34.0522, "lon": -118.2437}
+            "coordinates": {"lat": 34.0522, "lon": -118.2437},
+            "password": "securePass"
         },
         {
             "lid": "L0003",
             "name": "City Hospital 1",
             "city": "New York, NY",
-            "locationCode": "HOSP",
-            "coordinates": {"lat": 40.7128, "lon": -74.0060}
+            "coordinates": {"lat": 40.7128, "lon": -74.0060},
+            "password": "hospitalNY"
         },
         {
             "lid": "L0004",
             "name": "Regional Medical Center",
             "city": "Chicago, IL",
-            "locationCode": "HOSP",
-            "coordinates": {"lat": 41.8781, "lon": -87.6298}
+            "coordinates": {"lat": 41.8781, "lon": -87.6298},
+            "password": "chicagoPass"
         },
         {
             "lid": "L0005",
             "name": "Health Clinic",
             "city": "Houston, TX",
-            "locationCode": "HOSP",
-            "coordinates": {"lat": 29.7604, "lon": -95.3698}
+            "coordinates": {"lat": 29.7604, "lon": -95.3698},
+            "password": "houstonClinic"
         }
     ]
+    
     db.locations.drop()
+    # Hash passwords before insertion.
+    for hosp in hospitals:
+        hosp["passwordHash"] = hash_password(hosp.pop("password"))
     db.locations.insert_many(hospitals)
     print(f"Inserted {len(hospitals)} sample hospitals.")
 
 def generate_sample_donors(db):
     """
-    Inserts manually defined donor documents.
+    Inserts a few manually defined donor documents.
     """
     donors = [
         {
@@ -204,6 +216,17 @@ def generate_sample_inventory(db):
         db.globalInventory.insert_many(inventory)
     print("Inserted sample blood bags and global inventory for every blood type at each hospital.")
 
+def set_manual_flags(db):
+    """
+    Manually sets flag values for testing matching.
+    Here we:
+      - Mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+.
+      - Mark "Central Medical Center" in Boston, MA as having a surplus for A+.
+    """
+    update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True)
+    update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False)
+    print("Manually set surplus/shortage flags for testing.")
+
 def generate_all_sample_data():
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
@@ -213,19 +236,19 @@ def generate_all_sample_data():
     generate_sample_inventory(db)
     print("All sample data generated.")
     
-    # Update the secondary collection so that every hospital has data for every blood type.
+    # Update secondary collection so that every hospital has complete aggregated data.
     update_secondary_data(db)
     
-    # Manually update flags so a match is possible.
-    # For example, mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+,
-    # and "Central Medical Center" in Boston, MA as having a surplus for A+.
-    update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True)
-    update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False)
-    update_inventory_flag(db, "Health Clinic", "Houston, TX", "A+", surplus=True, shortage=False)
-    update_inventory_flag(db, "City Hospital 1", "New York, NY", "A+", surplus=True, shortage=False)
+    # Update manual flags for testing matching.
+    set_manual_flags(db)
     
-    # Refresh secondary data after manual flag updates.
+    # For demonstration, add extra inventory for "Central Medical Center" for blood type A+.
+    # This should increase the total for A+ above 500.
+    update_hospital_inventory(db, "Central Medical Center", "Boston, MA", "A+", 5)
+    
+    # Refresh secondary collection after manual updates.
     update_secondary_data(db)
+    print("Final sample data generation complete.")
 
 if __name__ == "__main__":
     generate_all_sample_data()
