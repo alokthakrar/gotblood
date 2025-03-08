@@ -260,20 +260,22 @@ def update_hospital_inventory(db, hospital, city, bloodType, delta_count):
         print(inv)
 
 def update_inventory_flag(db, hospital, city, blood_type, surplus=None, shortage=None):
-    update_fields = {}
+    update_doc = {}
     if surplus is not None:
-        update_fields["bloodTypeStats.$.surplus"] = surplus
+        update_doc["bloodTypeStats.$[elem].surplus"] = surplus
     if shortage is not None:
-        update_fields["bloodTypeStats.$.shortage"] = shortage
-    if update_fields:
+        update_doc["bloodTypeStats.$[elem].shortage"] = shortage
+    if update_doc:
         result = db.donorStats.update_one(
-            {"hospital": hospital, "city": city, "bloodTypeStats.bloodType": blood_type},
-            {"$set": update_fields}
+            {"hospital": hospital, "city": city},
+            {"$set": update_doc},
+            array_filters=[{"elem.bloodType": blood_type}]
         )
         if result.modified_count > 0:
             print(f"Updated flags for {hospital}, {city}, blood type {blood_type}.")
         else:
             print(f"No matching record found to update flags for {hospital}, {city}, blood type {blood_type}.")
+
 
 def add_hospital(db, hospital_data):
     if "lid" not in hospital_data:
