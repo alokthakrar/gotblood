@@ -2,10 +2,10 @@
 from pymongo import MongoClient
 from datetime import datetime
 import random
+import bcrypt
 
 # Import necessary functions from hospital_managment.py
 from hospital_managment import (
-    register_auth0_user,
     update_secondary_data,
     update_inventory_flag,
     add_hospital,
@@ -16,6 +16,11 @@ from hospital_managment import (
     remove_donor_and_update
 )
 
+def hash_password(plain_password):
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
 def wipe_database(db_name="americanRedCrossDB"):
     client = MongoClient("mongodb://localhost:27017")
     client.drop_database(db_name)
@@ -23,26 +28,23 @@ def wipe_database(db_name="americanRedCrossDB"):
 
 def generate_sample_hospitals(db):
     """
-    Inserts 5 manually defined hospitals using Auth0 for user registration.
+    Inserts 5 manually defined hospitals with hashed passwords.
+    We now ensure each hospital gets a unique 'lid' before insertion.
     """
     hospitals = [
-        {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "pass123"},
-        {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "securePass"},
-        {"name": "City Hospital 1", "city": "New York, NY", "coordinates": {"lat": 40.7128, "lon": -74.0060}, "password": "hospitalNY"},
-        {"name": "Regional Medical Center", "city": "Chicago, IL", "coordinates": {"lat": 41.8781, "lon": -87.6298}, "password": "chicagoPass"},
-        {"name": "Health Clinic", "city": "Houston, TX", "coordinates": {"lat": 29.7604, "lon": -95.3698}, "password": "houstonClinic"}
+        {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "1]e>eDFDxq35ZK"},
+        {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "1]e>eDFDxq35ZK"},
+        {"name": "City Hospital 1", "city": "New York, NY", "coordinates": {"lat": 40.7128, "lon": -74.0060}, "password": "1]e>eDFDxq35ZK"},
+        {"name": "Regional Medical Center", "city": "Chicago, IL", "coordinates": {"lat": 41.8781, "lon": -87.6298}, "password": "1]e>eDFDxq35ZK"},
+        {"name": "Health Clinic", "city": "Houston, TX", "coordinates": {"lat": 29.7604, "lon": -95.3698}, "password": "1]e>eDFDxq35ZK"}
     ]
-    
+    # Assign a unique lid to each hospital before insertion.
     for i, hosp in enumerate(hospitals, start=1):
         hosp["lid"] = "L{:04d}".format(i)
-        # Register hospital admin with Auth0 and add to database.
-        add_hospital(
-            db,
-            name=hosp["name"],
-            city=hosp["city"],
-            coordinates=hosp["coordinates"],
-            password=hosp["password"]
-        )
+        # Hash the password and store as passwordHash.
+        hosp["passwordHash"] = hash_password(hosp.pop("password"))
+    db.locations.drop()
+    db.locations.insert_many(hospitals)
     print(f"Inserted {len(hospitals)} sample hospitals.")
 
 def generate_sample_donors(db):
