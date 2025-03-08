@@ -15,23 +15,24 @@ def get_complete_hospital_data(db):
     for hosp in hospitals:
         hospital_name = hosp.get("hospital")
         city = hosp.get("city")
-        # Build lookup dictionaries for inventory and flag settings.
-        inv_lookup = {}
-        for inv in hosp.get("inventoryStats", []):
-            inv_lookup[inv.get("bloodType")] = inv.get("totalBloodCC", 0)
-        flag_lookup = {}
-        for bt in hosp.get("bloodTypeStats", []):
-            flag_lookup[bt.get("bloodType")] = (bt.get("surplus", False), bt.get("shortage", False))
+        
+        # Build lookup dictionaries for inventory amounts and flag settings.
+        inv_lookup = { inv.get("bloodType"): inv.get("totalBloodCC", 0) 
+                       for inv in hosp.get("inventoryStats", []) }
+        flag_lookup = { bt.get("bloodType"): (bt.get("surplus", False), bt.get("shortage", False))
+                        for bt in hosp.get("bloodTypeStats", []) }
+        
+        # Create a complete list of blood type data.
         blood_data = []
         for bt in complete_blood_types:
             total = inv_lookup.get(bt, 0)
             surplus, shortage = flag_lookup.get(bt, (False, False))
             blood_data.append((bt, total, surplus, shortage))
+        
         results.append((hospital_name, city, blood_data))
     return results
 
 def main():
-    from pymongo import MongoClient
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
     hospitals_data = get_complete_hospital_data(db)
