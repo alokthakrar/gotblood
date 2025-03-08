@@ -1,5 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+//import '../styles/App.css';
+import '../index.css';
+//import {Navbar} from 'react-bootstrap';
 
 const Navbar = () => {
   return (
