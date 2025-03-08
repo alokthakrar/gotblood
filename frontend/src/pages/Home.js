@@ -1,13 +1,19 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
+import Sidebar from '../components/Sidebar';
 import HospitalMap from '../features/HospitalMap';
 const Home = () => {
   return (
-    <div>
+    <div className="home-container">
       <Navbar />
-      <h1>Welcome to the Blood Donation App</h1>
-      <p>Streamlining blood donations across the country!</p>
-      <HospitalMap />
+      <div className="content-wrapper">
+        <Sidebar />
+        <div className="main-content">
+          <h1>got blood?</h1>
+          <p>Streamlining blood donations across the country!</p>
+          <HospitalMap />
+        </div>
+      </div>
     </div>
   );
 };

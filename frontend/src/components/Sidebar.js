@@ -1,5 +1,6 @@
-import React from 'react';
+/*import React from 'react';
 import { Menu } from 'antd'; // Import Menu from Ant Design
+import '../index.css';
 
 const Sidebar = () => {
   return (
@@ -18,4 +19,25 @@ const Sidebar = () => {
   );
 };
 
+export default Sidebar;*/
+
+import React from 'react';
+import '../index.css';  // Make sure to include your CSS file
+
+const Sidebar = () => {
+  return (
+    <div className="sidebar">
+      <h3>Blood Types</h3>
+      <ul>
+        <li><a href="#blood-type-a">Blood Type A</a></li>
+        <li><a href="#blood-type-b">Blood Type B</a></li>
+        <li><a href="#blood-type-ab">Blood Type AB</a></li>
+        <li><a href="#blood-type-o">Blood Type O</a></li>
+      </ul>
+    </div>
+  );
+};
+
 export default Sidebar;
+
+

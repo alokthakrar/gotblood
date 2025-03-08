@@ -8,22 +8,76 @@
 .sidebar {
   width: 250px;
   padding: 15px;
-  background: #f8f8f8;
+  background: #932d2d; /* Red background */
+  color: white;
+  /*height: 100vh;*/
+  height: 100vh;
+  position: fixed;
+  top: 100px;
+  left: 0;
   border-right: 2px solid #ddd;
+  transition: all 0.3s ease;
 }
 
 .sidebar h3 {
   margin-bottom: 10px;
+  font-size: 1.5rem;
 }
 
-.sidebar select {
+.sidebar a {
+  color: white;
+  text-decoration: none;
+  display: block;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+.sidebar a:hover {
+  background-color: #ff6666; /* Lighter red on hover */
+}
+
+/* Add a link to close the sidebar */
+.sidebar-close {
+  color: white;
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/*.sidebar select {
   width: 100%;
   padding: 8px;
   margin-bottom: 10px;
-}
+}*/
 
 /* Ensure the map takes up remaining space */
 .map-wrapper {
   flex-grow: 1;
   height: 100%;
+}
+
+.navbar {
+  background-color: white; /* White background for navbar */
+  padding: 50px;
+  color: red;
+}
+
+.navbar a {
+  color: red;
+  text-decoration: none;
+}
+
+.navbar a:hover {
+  color: #ff4d4d; /* Hover effect with a lighter red */
+}
+
+.main-content {
+  margin-left: 250px; /* Space for the sidebar */
+  padding: 20px;
+  background: white; /* White background for main content */
+  min-height: 100vh;
 }
