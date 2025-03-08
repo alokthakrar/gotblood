@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask Mailman</title>
+</head>
+<body>
+    <h1>Send an Email</h1>
+    <form action="{{ url_for('send_email') }}" method="POST">
+        <label for="email">Recipient Email:</label>
+        <input type="email" name="email" required><br><br>
+        <label for="subject">Subject:</label>
+        <input type="text" name="subject" required><br><br>
+        <label for="body">Body:</label>
+        <textarea name="body" required></textarea><br><br>
+        <button type="submit">Send Email</button>
+    </form>
+</body>
+</html>

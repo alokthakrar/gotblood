@@ -2,10 +2,7 @@
 from pymongo import MongoClient
 from datetime import datetime
 import random
-import bcrypt
-
-# Import necessary functions from hospital_managment.py
-from hospital_managment import (
+from managementAuth import (
     update_secondary_data,
     update_inventory_flag,
     add_hospital,
@@ -16,11 +13,6 @@ from hospital_managment import (
     remove_donor_and_update
 )
 
-def hash_password(plain_password):
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
-
 def wipe_database(db_name="americanRedCrossDB"):
     client = MongoClient("mongodb://localhost:27017")
     client.drop_database(db_name)
@@ -28,29 +20,25 @@ def wipe_database(db_name="americanRedCrossDB"):
 
 def generate_sample_hospitals(db):
     """
-    Inserts 5 manually defined hospitals with hashed passwords.
-    We now ensure each hospital gets a unique 'lid' before insertion.
+    Inserts 5 manually defined hospitals with plain text passwords,
+    and registers them with Auth0 using the hospital name as username.
     """
     hospitals = [
-        {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "1]e>eDFDxq35ZK"},
-        {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "1]e>eDFDxq35ZK"},
-        {"name": "City Hospital 1", "city": "New York, NY", "coordinates": {"lat": 40.7128, "lon": -74.0060}, "password": "1]e>eDFDxq35ZK"},
-        {"name": "Regional Medical Center", "city": "Chicago, IL", "coordinates": {"lat": 41.8781, "lon": -87.6298}, "password": "1]e>eDFDxq35ZK"},
-        {"name": "Health Clinic", "city": "Houston, TX", "coordinates": {"lat": 29.7604, "lon": -95.3698}, "password": "1]e>eDFDxq35ZK"}
+        {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "pass123"},
+        {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "securePass"},
+        {"name": "City Hospital 1", "city": "New York, NY", "coordinates": {"lat": 40.7128, "lon": -74.0060}, "password": "hospitalNY"},
+        {"name": "Regional Medical Center", "city": "Chicago, IL", "coordinates": {"lat": 41.8781, "lon": -87.6298}, "password": "chicagoPass"},
+        {"name": "Health Clinic", "city": "Houston, TX", "coordinates": {"lat": 29.7604, "lon": -95.3698}, "password": "houstonClinic"}
     ]
-    # Assign a unique lid to each hospital before insertion.
+    db.locations.drop()
     for i, hosp in enumerate(hospitals, start=1):
         hosp["lid"] = "L{:04d}".format(i)
-        # Hash the password and store as passwordHash.
-        hosp["passwordHash"] = hash_password(hosp.pop("password"))
-    db.locations.drop()
+        from managementAuth import register_auth0_user
+        register_auth0_user(hosp["name"], hosp["password"])
     db.locations.insert_many(hospitals)
     print(f"Inserted {len(hospitals)} sample hospitals.")
 
 def generate_sample_donors(db):
-    """
-    Inserts manually defined donor documents.
-    """
     donors = [
         {
             "pid": "P0000001",
@@ -154,10 +142,6 @@ def generate_sample_donors(db):
     print(f"Inserted {len(donors)} sample donors.")
 
 def generate_sample_inventory(db):
-    """
-    Inserts inventory records for every hospital and every blood type.
-    Each hospital will have one blood bag record per blood type with a fixed quantity (500 CC).
-    """
     blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     db.bloodBags.drop()
     db.globalInventory.drop()
@@ -174,7 +158,7 @@ def generate_sample_inventory(db):
             bag = {
                 "bbid": bbid,
                 "donationType": "Whole Blood",
-                "quantityCC": 500,  # Fixed quantity for testing.
+                "quantityCC": 500,
                 "bloodType": bt,
                 "available": True
             }
@@ -193,12 +177,7 @@ def generate_sample_inventory(db):
     print("Inserted sample blood bags and global inventory for every blood type at each hospital.")
 
 def set_manual_flags(db):
-    """
-    Manually sets flags for testing matching.
-    For example, mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+,
-    and mark "Central Medical Center" in Boston, MA, "City Hospital 1" in New York, NY, and 
-    "Health Clinic" in Houston, TX as having surplus for A+.
-    """
+    from managementAuth import update_inventory_flag
     update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True, password="securePass")
     update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False, password="pass123")
     update_inventory_flag(db, "City Hospital 1", "New York, NY", "A+", surplus=True, shortage=False, password="hospitalNY")
@@ -206,6 +185,7 @@ def set_manual_flags(db):
     print("Manually set surplus/shortage flags for testing matching.")
 
 def generate_all_sample_data():
+    from managementAuth import update_secondary_data, update_hospital_inventory
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
     wipe_database("americanRedCrossDB")
@@ -214,18 +194,19 @@ def generate_all_sample_data():
     generate_sample_inventory(db)
     print("All sample data generated.")
     
-    # Update the secondary collection so that every hospital has complete aggregated data.
     update_secondary_data(db)
-    
-    # Manually update flags for testing matching.
     set_manual_flags(db)
     
-    # For demonstration, add extra inventory for "Central Medical Center" for blood type A+.
+    # For demonstration, add extra inventory for "Central Medical Center" for A+.
     update_hospital_inventory(db, "Central Medical Center", "Boston, MA", "A+", 5, password="pass123")
     
-    # Refresh secondary collection after manual updates.
     update_secondary_data(db)
     print("Final sample data generation complete.")
+
+def wipe_database(db_name="americanRedCrossDB"):
+    client = MongoClient("mongodb://localhost:27017")
+    client.drop_database(db_name)
+    print(f"Database '{db_name}' has been wiped.")
 
 if __name__ == "__main__":
     generate_all_sample_data()

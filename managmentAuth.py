@@ -3,19 +3,90 @@ from pymongo import MongoClient
 from datetime import datetime
 import math
 import random
-import bcrypt
+import requests
 
 #######################################
-# Helper functions for password handling
+# Auth0 Configuration and Helper Functions (Integrated)
 #######################################
 
-def hash_password(plain_password):
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+# Replace these values with your Auth0 configuration if needed.
+auth0_domain = "dev-nzbenqyyuji62b1n.us.auth0.com"  # Your Auth0 domain
+auth0_client_id = "zVcYBqZQsx6d9mEwEaW1zQxT9gEiKHnA"  # Your Auth0 client ID
+auth0_client_secret = "zxMUC-ND13MaB-2ED-_I0IZmlJHxbIJqiNehJCEhCrpi2diKEwQ9e-tqZIWos9gn"  # Your Auth0 client secret
+auth0_audience = "https://PassWordManager.com"  # Your Auth0 API identifier
+auth0_token_url = f"https://{auth0_domain}/oauth/token"
 
-def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+# Set TEST_MODE to True to bypass real Auth0 calls for local testing.
+TEST_MODE = True
+
+def get_auth0_token():
+    payload = {
+        "client_id": auth0_client_id,
+        "client_secret": auth0_client_secret,
+        "audience": auth0_audience,
+        "grant_type": "client_credentials"
+    }
+    response = requests.post(auth0_token_url, json=payload)
+    response.raise_for_status()
+    return response.json().get("access_token")
+
+def verify_auth0_user(username, password):
+    """
+    Verifies the user credentials via Auth0.
+    In TEST_MODE, we use a simple mapping where the hospital name is the username.
+    Debug prints show the username, provided password, and expected value.
+    """
+    if TEST_MODE:
+        test_passwords = {
+            "Central Medical Center": "pass123",
+            "General Hospital 1": "securePass",
+            "City Hospital 1": "hospitalNY",
+            "Regional Medical Center": "chicagoPass",
+            "Health Clinic": "houstonClinic"
+        }
+        expected = test_passwords.get(username)
+        print(f"[DEBUG] verify_auth0_user: Checking username='{username}' with provided password='{password}', expected='{expected}'")
+        if expected and expected == password:
+            return {"access_token": "TEST_TOKEN"}
+        else:
+            return None
+    else:
+        url = f"https://{auth0_domain}/oauth/token"
+        payload = {
+            "grant_type": "password",
+            "username": username,
+            "password": password,
+            "audience": auth0_audience,
+            "client_id": auth0_client_id,
+            "client_secret": auth0_client_secret,
+            "scope": "openid profile email"
+        }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return None
+
+def register_auth0_user(username, password):
+    """
+    Registers a new user with Auth0.
+    In TEST_MODE, simply prints a message.
+    """
+    if TEST_MODE:
+        print(f"[TEST_MODE] Registered Auth0 user: {username}")
+    else:
+        url = f"https://{auth0_domain}/dbconnections/signup"
+        payload = {
+            "client_id": auth0_client_id,
+            "email": username,  # using hospital name as username/email
+            "password": password,
+            "connection": "Username-Password-Authentication"
+        }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            print("User registered successfully.")
+        else:
+            print("Failed to register user:", response.json())
 
 #######################################
 # Aggregation & Update Functions (Internal)
@@ -25,11 +96,7 @@ def aggregate_donor_data_by_location(db):
     pipeline = [
         {"$match": {"role": "donor"}},
         {"$group": {
-            "_id": {
-                "hospital": "$hospital",
-                "city": "$city",
-                "bloodType": "$donorDetails.bloodType"
-            },
+            "_id": {"hospital": "$hospital", "city": "$city", "bloodType": "$donorDetails.bloodType"},
             "donorCount": {"$sum": 1}
         }},
         {"$group": {
@@ -52,19 +119,9 @@ def aggregate_donor_data_by_location(db):
 
 def aggregate_inventory_by_location(db):
     pipeline = [
-        {"$lookup": {
-            "from": "bloodBags",
-            "localField": "bbid",
-            "foreignField": "bbid",
-            "as": "bag"
-        }},
+        {"$lookup": {"from": "bloodBags", "localField": "bbid", "foreignField": "bbid", "as": "bag"}},
         {"$unwind": "$bag"},
-        {"$lookup": {
-            "from": "locations",
-            "localField": "lid",
-            "foreignField": "lid",
-            "as": "loc"
-        }},
+        {"$lookup": {"from": "locations", "localField": "lid", "foreignField": "lid", "as": "loc"}},
         {"$unwind": "$loc"},
         {"$match": {"available": True}},
         {"$group": {
@@ -78,12 +135,7 @@ def aggregate_inventory_by_location(db):
                 "totalBloodCC": "$totalBloodCC"
             }}
         }},
-        {"$project": {
-            "_id": 0,
-            "hospital": "$_id.hospital",
-            "city": "$_id.city",
-            "inventoryStats": 1
-        }}
+        {"$project": {"_id": 0, "hospital": "$_id.hospital", "city": "$_id.city", "inventoryStats": 1}}
     ]
     return list(db.globalInventory.aggregate(pipeline))
 
@@ -105,12 +157,10 @@ def update_secondary_data(db):
     inventory_stats = aggregate_inventory_by_location(db)
     merged_data = merge_secondary_data(donor_stats, inventory_stats)
     
-    # Complete missing blood types
     complete_blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     hospitals = list(db.locations.find())
     merged_dict = {(rec["hospital"], rec["city"]): rec for rec in merged_data}
     
-    # Preserve existing manual flag updates.
     existing_flags = {}
     for rec in db.donorStats.find():
         key = (rec["hospital"], rec["city"])
@@ -125,7 +175,6 @@ def update_secondary_data(db):
             merged_dict[key] = {"hospital": hosp["name"], "city": hosp["city"],
                                 "bloodTypeStats": [], "inventoryStats": []}
         record = merged_dict[key]
-        # Complete donor stats.
         new_bt_stats = []
         for bt in complete_blood_types:
             computed = next((item for item in record.get("bloodTypeStats", []) if item["bloodType"] == bt), None)
@@ -139,7 +188,6 @@ def update_secondary_data(db):
             })
         record["bloodTypeStats"] = new_bt_stats
         
-        # Complete inventory stats.
         new_inv_stats = []
         for bt in complete_blood_types:
             computed_inv = next((item for item in record.get("inventoryStats", []) if item["bloodType"] == bt), None)
@@ -155,7 +203,7 @@ def update_secondary_data(db):
     print("Secondary collection 'donorStats' updated with complete data.")
 
 #######################################
-# Donor and Inventory Management Functions (with authentication)
+# Donor and Inventory Management Functions (with Auth0 integration)
 #######################################
 
 def add_donor(db, donor_data):
@@ -179,12 +227,12 @@ def remove_donor_and_update(db, pid):
     update_secondary_data(db)
 
 def update_hospital_inventory(db, hospital, city, bloodType, delta_count, password):
-    # Verify password first.
     hosp_doc = db.locations.find_one({"name": hospital, "city": city})
     if not hosp_doc:
         print("Hospital not found!")
         return
-    if "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+    auth_response = verify_auth0_user(hospital, password)
+    if not auth_response:
         print("Authentication failed: Incorrect password.")
         return
 
@@ -242,12 +290,11 @@ def update_hospital_inventory(db, hospital, city, bloodType, delta_count, passwo
         print(inv)
 
 def update_inventory_flag(db, hospital, city, blood_type, surplus=None, shortage=None, password=None):
-    # For updating flags, also require a password.
     hosp_doc = db.locations.find_one({"name": hospital, "city": city})
     if not hosp_doc:
         print("Hospital not found!")
         return
-    if password is None or "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+    if password is None or not verify_auth0_user(hospital, password):
         print("Authentication failed: Incorrect password.")
         return
 
@@ -273,9 +320,13 @@ def add_hospital(db, hospital_data):
         hospital_data["lid"] = "L{:04d}".format(count + 1)
     if "locationCode" not in hospital_data:
         hospital_data["locationCode"] = "HOSP"
-    if "password" in hospital_data:
-        hospital_data["passwordHash"] = hash_password(hospital_data.pop("password"))
-    result = db.locations.insert_one(hospital_data)
+    if "password" not in hospital_data:
+        print("No password provided; hospital not added.")
+        return None
+    # Register with Auth0 using hospital name as username.
+    register_auth0_user(hospital_data["name"], hospital_data["password"])
+    # For testing, we insert the hospital document.
+    db.locations.insert_one(hospital_data)
     print(f"Hospital '{hospital_data['name']}' added with lid {hospital_data['lid']}.")
     return hospital_data
 
@@ -283,23 +334,17 @@ def search_secondary(db, hospital, city):
     result = db.donorStats.find_one({"hospital": hospital, "city": city})
     return result
 
-#######################################
-# Main Function for Hospital Management
-#######################################
-
 def main():
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
 
-    # Update secondary collection based on existing primary data.
     update_secondary_data(db)
     
-    # Print all hospitals for reference.
     print("Hospitals in the database:")
     for hosp in db.locations.find():
         print(f"{hosp['name']} - {hosp['city']}")
     
-    # Example: Add a new hospital with a password.
+    # Example: Add a new hospital with Auth0 registration.
     hospital_data = {
         "name": "Central Medical Center",
         "city": "Boston, MA",
@@ -307,46 +352,41 @@ def main():
         "password": "pass123"
     }
     new_hosp = add_hospital(db, hospital_data)
-    hosp_name = new_hosp["name"]
-    hosp_city = new_hosp["city"]
+    if new_hosp:
+        hosp_name = new_hosp["name"]
+        hosp_city = new_hosp["city"]
     
-    # For each blood type, add 5 blood bags and set surplus flag to True.
-    blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
-    for bt in blood_types:
-        # Use the hospital's password ("pass123" in this example) for authentication.
-        update_hospital_inventory(db, hosp_name, hosp_city, bt, 5, password="pass123")
-        update_inventory_flag(db, hosp_name, hosp_city, bt, surplus=True, shortage=False, password="pass123")
+        blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
+        for bt in blood_types:
+            update_hospital_inventory(db, hosp_name, hosp_city, bt, 5, password="pass123")
+            update_inventory_flag(db, hosp_name, hosp_city, bt, surplus=True, shortage=False, password="pass123")
     
-    update_secondary_data(db)
+        update_secondary_data(db)
     
-    # Example: Add a donor.
-    donor = {
-        "pid": "P3333333",
-        "firstName": "Derek",
-        "lastName": "Miller",
-        "age": 32,
-        "hospital": "Central Medical Center",
-        "city": "Boston, MA",
-        "donorDetails": {
-            "bloodType": "B+",
-            "weightLBS": 175,
-            "heightIN": 72,
-            "gender": "M",
-            "nextSafeDonation": datetime(2025, 8, 15)
+        donor = {
+            "pid": "P3333333",
+            "firstName": "Derek",
+            "lastName": "Miller",
+            "age": 32,
+            "hospital": "Central Medical Center",
+            "city": "Boston, MA",
+            "donorDetails": {
+                "bloodType": "B+",
+                "weightLBS": 175,
+                "heightIN": 72,
+                "gender": "M",
+                "nextSafeDonation": datetime(2025, 8, 15)
+            }
         }
-    }
-    add_donor_and_update(db, donor)
+        add_donor_and_update(db, donor)
     
-    # Example: Remove a donor.
-    #remove_donor_and_update(db, "P1111111")
+        remove_donor_and_update(db, "P1111111")
     
-    # Example: Update hospital inventory (requires password).
-    update_hospital_inventory(db, hosp_name, hosp_city, "O+", 2, password="pass123")
+        update_hospital_inventory(db, hosp_name, hosp_city, "O+", 2, password="pass123")
     
-    # Example: Search for the hospital in the secondary collection.
-    result = search_secondary(db, hosp_name, hosp_city)
-    print(f"\nSearch result for {hosp_name} in {hosp_city}:")
-    print(result)
+        result = search_secondary(db, hosp_name, hosp_city)
+        print(f"\nSearch result for {hosp_name} in {hosp_city}:")
+        print(result)
     
 if __name__ == "__main__":
     main()
