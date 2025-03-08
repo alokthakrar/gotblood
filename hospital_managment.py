@@ -98,19 +98,27 @@ def create_secondary_collection(db, merged_data):
     db.donorStats.insert_many(merged_data)
 
 def update_secondary_data(db):
-    # First, perform the normal aggregation
+    # Perform normal aggregation from donors and inventory.
     donor_stats = aggregate_donor_data_by_location(db)
     inventory_stats = aggregate_inventory_by_location(db)
     merged_data = merge_secondary_data(donor_stats, inventory_stats)
     
-    # Complete missing blood type data for every hospital.
+    # Retrieve existing donorStats (if any) to preserve manual flag updates.
+    existing_flags = {}
+    for doc in db.donorStats.find():
+        key = (doc["hospital"], doc["city"])
+        flag_dict = {}
+        for bt in doc.get("bloodTypeStats", []):
+            flag_dict[bt["bloodType"]] = (bt.get("surplus", False), bt.get("shortage", False))
+        existing_flags[key] = flag_dict
+
     complete_blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
-    # Get all hospitals from the locations collection
+    # Get all hospitals from the locations collection.
     hospitals = list(db.locations.find())
     # Create a dictionary of merged data keyed by (hospital, city)
     merged_dict = {(record["hospital"], record["city"]): record for record in merged_data}
     
-    # Ensure every hospital has a record and complete missing blood types.
+    # For each hospital in locations, ensure a record exists and that each blood type is present.
     for hosp in hospitals:
         key = (hosp["name"], hosp["city"])
         if key not in merged_dict:
@@ -121,29 +129,38 @@ def update_secondary_data(db):
                 "inventoryStats": []
             }
         record = merged_dict[key]
-        # Complete donor stats
-        existing_bt_stats = {bt["bloodType"]: bt for bt in record.get("bloodTypeStats", [])}
-        completed_bt_stats = []
+        # Complete bloodTypeStats: preserve existing flags if available.
+        new_bt_stats = []
         for bt in complete_blood_types:
-            if bt in existing_bt_stats:
-                completed_bt_stats.append(existing_bt_stats[bt])
-            else:
-                completed_bt_stats.append({"bloodType": bt, "donorCount": 0, "surplus": False, "shortage": False})
-        record["bloodTypeStats"] = completed_bt_stats
-        
-        # Complete inventory stats
-        existing_inv_stats = {inv["bloodType"]: inv for inv in record.get("inventoryStats", [])}
-        completed_inv_stats = []
+            # Get computed donorCount from the aggregated data.
+            computed = next((item for item in record.get("bloodTypeStats", []) if item["bloodType"] == bt), None)
+            donorCount = computed["donorCount"] if computed else 0
+            # If we have existing flag values, use them; otherwise default to False.
+            flags = existing_flags.get(key, {}).get(bt, (False, False))
+            new_bt_stats.append({
+                "bloodType": bt,
+                "donorCount": donorCount,
+                "surplus": flags[0],
+                "shortage": flags[1]
+            })
+        record["bloodTypeStats"] = new_bt_stats
+
+        # Complete inventoryStats: ensure every blood type is present.
+        new_inv_stats = []
         for bt in complete_blood_types:
-            if bt in existing_inv_stats:
-                completed_inv_stats.append(existing_inv_stats[bt])
-            else:
-                completed_inv_stats.append({"bloodType": bt, "totalBloodCC": 0})
-        record["inventoryStats"] = completed_inv_stats
-    
+            computed_inv = next((item for item in record.get("inventoryStats", []) if item["bloodType"] == bt), None)
+            totalBloodCC = computed_inv["totalBloodCC"] if computed_inv else 0
+            new_inv_stats.append({
+                "bloodType": bt,
+                "totalBloodCC": totalBloodCC
+            })
+        record["inventoryStats"] = new_inv_stats
+
     completed_merged_data = list(merged_dict.values())
     create_secondary_collection(db, completed_merged_data)
-    print("Secondary collection 'donorStats' updated with complete data for all blood types.")
+    print("Secondary collection 'donorStats' updated with complete data, preserving manual flag updates.")
+
+
 
 #######################################
 # Donor and Inventory Management Functions
