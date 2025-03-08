@@ -4,12 +4,16 @@ from datetime import datetime
 import random
 import bcrypt
 
-# Import the necessary functions from your hospital management module.
+# Import necessary functions from hospital_managment.py
 from hospital_managment import (
     update_secondary_data,
     update_inventory_flag,
     add_hospital,
-    update_hospital_inventory
+    update_hospital_inventory,
+    add_donor,
+    add_donor_and_update,
+    remove_donor,
+    remove_donor_and_update
 )
 
 def hash_password(plain_password):
@@ -25,55 +29,27 @@ def wipe_database(db_name="americanRedCrossDB"):
 def generate_sample_hospitals(db):
     """
     Inserts 5 manually defined hospitals with hashed passwords.
+    We now ensure each hospital gets a unique 'lid' before insertion.
     """
     hospitals = [
-        {
-            "lid": "L0001",
-            "name": "Central Medical Center",
-            "city": "Boston, MA",
-            "coordinates": {"lat": 42.3601, "lon": -71.0589},
-            "password": "pass123"
-        },
-        {
-            "lid": "L0002",
-            "name": "General Hospital 1",
-            "city": "Los Angeles, CA",
-            "coordinates": {"lat": 34.0522, "lon": -118.2437},
-            "password": "securePass"
-        },
-        {
-            "lid": "L0003",
-            "name": "City Hospital 1",
-            "city": "New York, NY",
-            "coordinates": {"lat": 40.7128, "lon": -74.0060},
-            "password": "hospitalNY"
-        },
-        {
-            "lid": "L0004",
-            "name": "Regional Medical Center",
-            "city": "Chicago, IL",
-            "coordinates": {"lat": 41.8781, "lon": -87.6298},
-            "password": "chicagoPass"
-        },
-        {
-            "lid": "L0005",
-            "name": "Health Clinic",
-            "city": "Houston, TX",
-            "coordinates": {"lat": 29.7604, "lon": -95.3698},
-            "password": "houstonClinic"
-        }
+        {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "pass123"},
+        {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "securePass"},
+        {"name": "City Hospital 1", "city": "New York, NY", "coordinates": {"lat": 40.7128, "lon": -74.0060}, "password": "hospitalNY"},
+        {"name": "Regional Medical Center", "city": "Chicago, IL", "coordinates": {"lat": 41.8781, "lon": -87.6298}, "password": "chicagoPass"},
+        {"name": "Health Clinic", "city": "Houston, TX", "coordinates": {"lat": 29.7604, "lon": -95.3698}, "password": "houstonClinic"}
     ]
-    
-    db.locations.drop()
-    # Hash passwords before insertion.
-    for hosp in hospitals:
+    # Assign a unique lid to each hospital before insertion.
+    for i, hosp in enumerate(hospitals, start=1):
+        hosp["lid"] = "L{:04d}".format(i)
+        # Hash the password and store as passwordHash.
         hosp["passwordHash"] = hash_password(hosp.pop("password"))
+    db.locations.drop()
     db.locations.insert_many(hospitals)
     print(f"Inserted {len(hospitals)} sample hospitals.")
 
 def generate_sample_donors(db):
     """
-    Inserts a few manually defined donor documents.
+    Inserts manually defined donor documents.
     """
     donors = [
         {
@@ -218,14 +194,16 @@ def generate_sample_inventory(db):
 
 def set_manual_flags(db):
     """
-    Manually sets flag values for testing matching.
-    Here we:
-      - Mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+.
-      - Mark "Central Medical Center" in Boston, MA as having a surplus for A+.
+    Manually sets flags for testing matching.
+    For example, mark "General Hospital 1" in Los Angeles, CA as having a shortage for A+,
+    and mark "Central Medical Center" in Boston, MA, "City Hospital 1" in New York, NY, and 
+    "Health Clinic" in Houston, TX as having surplus for A+.
     """
-    update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True)
-    update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False)
-    print("Manually set surplus/shortage flags for testing.")
+    update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True, password="securePass")
+    update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False, password="pass123")
+    update_inventory_flag(db, "City Hospital 1", "New York, NY", "A+", surplus=True, shortage=False, password="hospitalNY")
+    update_inventory_flag(db, "Health Clinic", "Houston, TX", "A+", surplus=True, shortage=False, password="houstonClinic")
+    print("Manually set surplus/shortage flags for testing matching.")
 
 def generate_all_sample_data():
     client = MongoClient("mongodb://localhost:27017")
@@ -236,15 +214,14 @@ def generate_all_sample_data():
     generate_sample_inventory(db)
     print("All sample data generated.")
     
-    # Update secondary collection so that every hospital has complete aggregated data.
+    # Update the secondary collection so that every hospital has complete aggregated data.
     update_secondary_data(db)
     
-    # Update manual flags for testing matching.
+    # Manually update flags for testing matching.
     set_manual_flags(db)
     
     # For demonstration, add extra inventory for "Central Medical Center" for blood type A+.
-    # This should increase the total for A+ above 500.
-    update_hospital_inventory(db, "Central Medical Center", "Boston, MA", "A+", 5)
+    update_hospital_inventory(db, "Central Medical Center", "Boston, MA", "A+", 5, password="pass123")
     
     # Refresh secondary collection after manual updates.
     update_secondary_data(db)
