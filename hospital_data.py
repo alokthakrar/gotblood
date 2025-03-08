@@ -33,6 +33,8 @@ def get_complete_hospital_data(db):
     return results
 
 def main():
+
+    #return all this data with an endpoint
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
     hospitals_data = get_complete_hospital_data(db)
