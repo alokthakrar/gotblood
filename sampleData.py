@@ -1,155 +1,178 @@
+# sampleData.py
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import random
-# Import the necessary functions from your functions file
-from databaseFunctions import update_secondary_data, update_inventory_flag
+
+# Import the necessary functions from your databaseFunctions module.
+from hospital_managment import update_secondary_data, update_inventory_flag
 
 def wipe_database(db_name="americanRedCrossDB"):
     client = MongoClient("mongodb://localhost:27017")
     client.drop_database(db_name)
     print(f"Database '{db_name}' has been dropped.")
 
-def generate_sample_hospitals(db, count=20):
+def generate_sample_hospitals(db):
     """
-    Generates sample hospital documents using real U.S. cities.
-    Each hospital has a unique ID, name, city, and coordinates.
+    Inserts manually defined hospital documents for easier testing.
     """
-    cities = [
-        {"city": "New York, NY", "lat": 40.7128, "lon": -74.0060},
-        {"city": "Los Angeles, CA", "lat": 34.0522, "lon": -118.2437},
-        {"city": "Chicago, IL", "lat": 41.8781, "lon": -87.6298},
-        {"city": "Houston, TX", "lat": 29.7604, "lon": -95.3698},
-        {"city": "Phoenix, AZ", "lat": 33.4484, "lon": -112.0740},
-        {"city": "Philadelphia, PA", "lat": 39.9526, "lon": -75.1652},
-        {"city": "San Antonio, TX", "lat": 29.4241, "lon": -98.4936},
-        {"city": "San Diego, CA", "lat": 32.7157, "lon": -117.1611},
-        {"city": "Dallas, TX", "lat": 32.7767, "lon": -96.7970},
-        {"city": "San Jose, CA", "lat": 37.3382, "lon": -121.8863}
-    ]
-    
-    base_names = ["General Hospital", "Community Health Center", "City Hospital", "Regional Medical Center", "Health Clinic"]
-    hospitals = []
-    
-    for i in range(count):
-        city_info = random.choice(cities)
-        name = random.choice(base_names) + " " + str(i+1)
-        hospital = {
-            "lid": "L{:04d}".format(i+1),
-            "name": name,
-            "city": city_info["city"],
+    hospitals = [
+        {
+            "lid": "L0001",
+            "name": "Central Medical Center",
+            "city": "Boston, MA",
             "locationCode": "HOSP",
-            "coordinates": {"lat": city_info["lat"], "lon": city_info["lon"]}
+            "coordinates": {"lat": 42.3601, "lon": -71.0589}
+        },
+        {
+            "lid": "L0002",
+            "name": "General Hospital 1",
+            "city": "Los Angeles, CA",
+            "locationCode": "HOSP",
+            "coordinates": {"lat": 34.0522, "lon": -118.2437}
+        },
+        {
+            "lid": "L0003",
+            "name": "City Hospital 1",
+            "city": "New York, NY",
+            "locationCode": "HOSP",
+            "coordinates": {"lat": 40.7128, "lon": -74.0060}
         }
-        hospitals.append(hospital)
+    ]
     db.locations.drop()
     db.locations.insert_many(hospitals)
-    print(f"Inserted {count} sample hospitals.")
+    print(f"Inserted {len(hospitals)} sample hospitals.")
 
-def generate_sample_donors(db, count=100):
+def generate_sample_donors(db):
     """
-    Generates sample donor documents.
-    Each donor is randomly assigned to one of the hospitals from the locations collection.
+    Inserts a few manually defined donor documents.
     """
-    donors = []
-    blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
-    first_names = ["John", "Jane", "Alice", "Bob", "Carol", "Derek", "Eva", "Frank", "Grace", "Henry"]
-    last_names = ["Doe", "Smith", "Brown", "Taylor", "Johnson", "Miller", "Davis", "Wilson", "Moore", "Anderson"]
-    
-    hospitals = list(db.locations.find())
-    for i in range(count):
-        hosp = random.choice(hospitals)
-        donor = {
-            "pid": "P{:07d}".format(i+1),
-            "firstName": random.choice(first_names),
-            "lastName": random.choice(last_names),
-            "age": random.randint(18, 65),
+    donors = [
+        {
+            "pid": "P0000001",
+            "firstName": "Alice",
+            "lastName": "Smith",
+            "age": 30,
             "role": "donor",
-            "hospital": hosp["name"],
-            "city": hosp["city"],
+            "hospital": "Central Medical Center",
+            "city": "Boston, MA",
             "donorDetails": {
-                "bloodType": random.choice(blood_types),
-                "weightLBS": random.randint(110, 250),
-                "heightIN": random.randint(60, 80),
-                "gender": random.choice(["M", "F"]),
-                "nextSafeDonation": datetime.now() + timedelta(days=random.randint(30, 100))
+                "bloodType": "A+",
+                "weightLBS": 150,
+                "heightIN": 65,
+                "gender": "F",
+                "nextSafeDonation": datetime(2025, 8, 1)
+            }
+        },
+        {
+            "pid": "P0000002",
+            "firstName": "Bob",
+            "lastName": "Jones",
+            "age": 40,
+            "role": "donor",
+            "hospital": "Central Medical Center",
+            "city": "Boston, MA",
+            "donorDetails": {
+                "bloodType": "O+",
+                "weightLBS": 180,
+                "heightIN": 70,
+                "gender": "M",
+                "nextSafeDonation": datetime(2025, 9, 1)
+            }
+        },
+        {
+            "pid": "P0000003",
+            "firstName": "Charlie",
+            "lastName": "Brown",
+            "age": 35,
+            "role": "donor",
+            "hospital": "General Hospital 1",
+            "city": "Los Angeles, CA",
+            "donorDetails": {
+                "bloodType": "B+",
+                "weightLBS": 175,
+                "heightIN": 68,
+                "gender": "M",
+                "nextSafeDonation": datetime(2025, 10, 1)
+            }
+        },
+        {
+            "pid": "P0000004",
+            "firstName": "Diana",
+            "lastName": "Prince",
+            "age": 28,
+            "role": "donor",
+            "hospital": "City Hospital 1",
+            "city": "New York, NY",
+            "donorDetails": {
+                "bloodType": "AB-",
+                "weightLBS": 135,
+                "heightIN": 64,
+                "gender": "F",
+                "nextSafeDonation": datetime(2025, 11, 1)
             }
         }
-        donors.append(donor)
+    ]
     db.persons.drop()
     db.persons.insert_many(donors)
-    print(f"Inserted {count} sample donors.")
+    print(f"Inserted {len(donors)} sample donors.")
 
 def generate_sample_inventory(db):
     """
-    Generates sample blood bag inventory.
-    For each hospital and for each blood type, it creates at least one inventory record.
-    If random generation returns 0, it forces one record with 0 quantity.
+    Inserts inventory records for every hospital and for every blood type.
+    Each hospital will have one blood bag record per blood type with a fixed quantity.
     """
     blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     db.bloodBags.drop()
     db.globalInventory.drop()
+    
     hospitals = list(db.locations.find())
     blood_bags = []
     inventory = []
     bbid_counter = 1
+    
     for hosp in hospitals:
         for bt in blood_types:
-            num_bags = random.randint(0, 10)
-            if num_bags == 0:
-                num_bags = 1  # Force at least one record per blood type.
-                qty = 0
-            else:
-                qty = None  # Not used.
-            for _ in range(num_bags):
-                bbid = "BB{:04d}".format(bbid_counter)
-                bbid_counter += 1
-                current_qty = 0 if qty == 0 else random.choice([450, 500, 550])
-                bag = {
-                    "bbid": bbid,
-                    "donationType": "Whole Blood",
-                    "quantityCC": current_qty,
-                    "bloodType": bt,
-                    "available": True
-                }
-                blood_bags.append(bag)
-                inv = {
-                    "bbid": bbid,
-                    "lid": hosp["lid"],
-                    "available": True
-                }
-                inventory.append(inv)
+            bbid = "BB{:04d}".format(bbid_counter)
+            bbid_counter += 1
+            bag = {
+                "bbid": bbid,
+                "donationType": "Whole Blood",
+                "quantityCC": 500,  # Fixed quantity for testing
+                "bloodType": bt,
+                "available": True
+            }
+            blood_bags.append(bag)
+            inv = {
+                "bbid": bbid,
+                "lid": hosp["lid"],
+                "available": True
+            }
+            inventory.append(inv)
+    
     if blood_bags:
         db.bloodBags.insert_many(blood_bags)
     if inventory:
         db.globalInventory.insert_many(inventory)
     print("Inserted sample blood bags and global inventory for every blood type at each hospital.")
 
-def randomize_flags(db):
-    """
-    Iterates through the secondary collection (donorStats) and randomly updates
-    the surplus and shortage flags for each blood type in each hospital.
-    """
-    donor_stats = list(db.donorStats.find())
-    for stat in donor_stats:
-        hospital = stat["hospital"]
-        city = stat["city"]
-        for bt_stat in stat.get("bloodTypeStats", []):
-            blood_type = bt_stat["bloodType"]
-            new_surplus = random.choice([True, False])
-            new_shortage = random.choice([True, False])
-            update_inventory_flag(db, hospital, city, blood_type, surplus=new_surplus, shortage=new_shortage)
-    print("Randomized flag settings updated.")
-
 def generate_all_sample_data():
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
     wipe_database("americanRedCrossDB")
-    generate_sample_hospitals(db, count=20)
-    generate_sample_donors(db, count=100)
+    generate_sample_hospitals(db)
+    generate_sample_donors(db)
     generate_sample_inventory(db)
     print("All sample data generated.")
     update_secondary_data(db)
-    randomize_flags(db)
+    
+    # Manually update flags to ensure a match:
+    # For hospital "General Hospital 1" in Los Angeles, CA, mark blood type A+ as shortage.
+    update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True)
+    # For hospital "Central Medical Center" in Boston, MA, mark blood type A+ as surplus.
+    update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False)
+    
+    # Update secondary data again to refresh flag settings.
+    update_secondary_data(db)
 
 if __name__ == "__main__":
     generate_all_sample_data()
