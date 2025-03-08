@@ -3,6 +3,19 @@ from pymongo import MongoClient
 from datetime import datetime
 import math
 import random
+import bcrypt
+
+#######################################
+# Helper functions for password handling
+#######################################
+
+def hash_password(plain_password):
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 #######################################
 # Aggregation & Update Functions (Internal)
@@ -20,10 +33,7 @@ def aggregate_donor_data_by_location(db):
             "donorCount": {"$sum": 1}
         }},
         {"$group": {
-            "_id": {
-                "hospital": "$_id.hospital",
-                "city": "$_id.city"
-            },
+            "_id": {"hospital": "$_id.hospital", "city": "$_id.city"},
             "bloodTypeStats": {"$push": {
                 "bloodType": "$_id.bloodType",
                 "donorCount": "$donorCount",
@@ -58,11 +68,7 @@ def aggregate_inventory_by_location(db):
         {"$unwind": "$loc"},
         {"$match": {"available": True}},
         {"$group": {
-            "_id": {
-                "hospital": "$loc.name",
-                "city": "$loc.city",
-                "bloodType": "$bag.bloodType"
-            },
+            "_id": {"hospital": "$loc.name", "city": "$loc.city", "bloodType": "$bag.bloodType"},
             "totalBloodCC": {"$sum": "$bag.quantityCC"}
         }},
         {"$group": {
@@ -95,67 +101,61 @@ def create_secondary_collection(db, merged_data):
     db.donorStats.insert_many(merged_data)
 
 def update_secondary_data(db):
-    # Aggregate donor data and inventory data.
     donor_stats = aggregate_donor_data_by_location(db)
     inventory_stats = aggregate_inventory_by_location(db)
+    merged_data = merge_secondary_data(donor_stats, inventory_stats)
     
-    # Create lookup dictionaries for donor and inventory stats.
-    donor_lookup = {(doc["hospital"], doc["city"]): doc["bloodTypeStats"] for doc in donor_stats}
-    inventory_lookup = {(doc["hospital"], doc["city"]): doc["inventoryStats"] for doc in inventory_stats}
-    
+    # Complete missing blood types
     complete_blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
-    
-    # For every hospital in the locations collection, build a complete aggregated record.
     hospitals = list(db.locations.find())
-    merged_dict = {}
+    merged_dict = {(rec["hospital"], rec["city"]): rec for rec in merged_data}
+    
+    # Preserve existing manual flag updates.
+    existing_flags = {}
+    for rec in db.donorStats.find():
+        key = (rec["hospital"], rec["city"])
+        flags = {}
+        for bt in rec.get("bloodTypeStats", []):
+            flags[bt["bloodType"]] = (bt.get("surplus", False), bt.get("shortage", False))
+        existing_flags[key] = flags
     
     for hosp in hospitals:
         key = (hosp["name"], hosp["city"])
-        # Use donor stats if available, otherwise default to empty list.
-        bt_stats = donor_lookup.get(key, [])
-        # Use inventory stats if available, otherwise default to empty list.
-        inv_stats = inventory_lookup.get(key, [])
-        
-        # Build lookup dictionaries for the existing aggregated values.
-        existing_bt_stats = {item["bloodType"]: item for item in bt_stats}
-        existing_inv_stats = {item["bloodType"]: item for item in inv_stats}
-        
-        complete_bt_stats = []
-        complete_inv_stats = []
-        
+        if key not in merged_dict:
+            merged_dict[key] = {"hospital": hosp["name"], "city": hosp["city"],
+                                "bloodTypeStats": [], "inventoryStats": []}
+        record = merged_dict[key]
+        # Complete donor stats.
+        new_bt_stats = []
         for bt in complete_blood_types:
-            # For donor stats: use the computed donorCount if available; else default to 0 and flags False.
-            donorCount = existing_bt_stats.get(bt, {}).get("donorCount", 0)
-            # Preserve manual flags if they exist.
-            surplus = existing_bt_stats.get(bt, {}).get("surplus", False)
-            shortage = existing_bt_stats.get(bt, {}).get("shortage", False)
-            complete_bt_stats.append({
+            computed = next((item for item in record.get("bloodTypeStats", []) if item["bloodType"] == bt), None)
+            donorCount = computed["donorCount"] if computed else 0
+            flags = existing_flags.get(key, {}).get(bt, (False, False))
+            new_bt_stats.append({
                 "bloodType": bt,
                 "donorCount": donorCount,
-                "surplus": surplus,
-                "shortage": shortage
+                "surplus": flags[0],
+                "shortage": flags[1]
             })
-            # For inventory stats: use totalBloodCC if available; else default to 0.
-            totalBloodCC = existing_inv_stats.get(bt, {}).get("totalBloodCC", 0)
-            complete_inv_stats.append({
+        record["bloodTypeStats"] = new_bt_stats
+        
+        # Complete inventory stats.
+        new_inv_stats = []
+        for bt in complete_blood_types:
+            computed_inv = next((item for item in record.get("inventoryStats", []) if item["bloodType"] == bt), None)
+            totalBloodCC = computed_inv["totalBloodCC"] if computed_inv else 0
+            new_inv_stats.append({
                 "bloodType": bt,
                 "totalBloodCC": totalBloodCC
             })
-        
-        merged_dict[key] = {
-            "hospital": hosp["name"],
-            "city": hosp["city"],
-            "bloodTypeStats": complete_bt_stats,
-            "inventoryStats": complete_inv_stats
-        }
-    
+        record["inventoryStats"] = new_inv_stats
+
     completed_merged_data = list(merged_dict.values())
     create_secondary_collection(db, completed_merged_data)
-    print("Secondary collection 'donorStats' updated with complete data for all hospitals.")
-
+    print("Secondary collection 'donorStats' updated with complete data.")
 
 #######################################
-# Donor and Inventory Management Functions
+# Donor and Inventory Management Functions (with authentication)
 #######################################
 
 def add_donor(db, donor_data):
@@ -178,13 +178,17 @@ def remove_donor_and_update(db, pid):
     remove_donor(db, pid)
     update_secondary_data(db)
 
-def update_hospital_inventory(db, hospital, city, bloodType, delta_count):
-    location = db.locations.find_one({"name": hospital, "city": city})
-    if not location:
-        print("Location not found!")
+def update_hospital_inventory(db, hospital, city, bloodType, delta_count, password):
+    # Verify password first.
+    hosp_doc = db.locations.find_one({"name": hospital, "city": city})
+    if not hosp_doc:
+        print("Hospital not found!")
         return
-    lid = location["lid"]
-    
+    if "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+        print("Authentication failed: Incorrect password.")
+        return
+
+    lid = hosp_doc["lid"]
     if delta_count > 0:
         for i in range(delta_count):
             new_bbid = "NEW" + str(db.bloodBags.count_documents({}) + 1)
@@ -203,7 +207,6 @@ def update_hospital_inventory(db, hospital, city, bloodType, delta_count):
             }
             db.globalInventory.insert_one(new_inventory)
         print(f"Added {delta_count} blood bag(s) of type {bloodType} to {hospital} in {city}.")
-    
     elif delta_count < 0:
         count_to_remove = -delta_count
         pipeline = [
@@ -238,7 +241,16 @@ def update_hospital_inventory(db, hospital, city, bloodType, delta_count):
     for inv in current_inventory:
         print(inv)
 
-def update_inventory_flag(db, hospital, city, blood_type, surplus=None, shortage=None):
+def update_inventory_flag(db, hospital, city, blood_type, surplus=None, shortage=None, password=None):
+    # For updating flags, also require a password.
+    hosp_doc = db.locations.find_one({"name": hospital, "city": city})
+    if not hosp_doc:
+        print("Hospital not found!")
+        return
+    if password is None or "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+        print("Authentication failed: Incorrect password.")
+        return
+
     update_doc = {}
     if surplus is not None:
         update_doc["bloodTypeStats.$[elem].surplus"] = surplus
@@ -261,13 +273,8 @@ def add_hospital(db, hospital_data):
         hospital_data["lid"] = "L{:04d}".format(count + 1)
     if "locationCode" not in hospital_data:
         hospital_data["locationCode"] = "HOSP"
-    # Expect a "password" field in hospital_data; hash it and store as passwordHash.
     if "password" in hospital_data:
-        import bcrypt
-        salt = bcrypt.gensalt()
-        hashed = bcrypt.hashpw(hospital_data["password"].encode('utf-8'), salt)
-        hospital_data["passwordHash"] = hashed.decode('utf-8')
-        del hospital_data["password"]
+        hospital_data["passwordHash"] = hash_password(hospital_data.pop("password"))
     result = db.locations.insert_one(hospital_data)
     print(f"Hospital '{hospital_data['name']}' added with lid {hospital_data['lid']}.")
     return hospital_data
@@ -281,14 +288,13 @@ def search_secondary(db, hospital, city):
 #######################################
 
 def main():
-    from pymongo import MongoClient
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
 
-    # Update secondary collection.
+    # Update secondary collection based on existing primary data.
     update_secondary_data(db)
     
-    # Print hospitals for reference.
+    # Print all hospitals for reference.
     print("Hospitals in the database:")
     for hosp in db.locations.find():
         print(f"{hosp['name']} - {hosp['city']}")
@@ -296,9 +302,9 @@ def main():
     # Example: Add a new hospital with a password.
     hospital_data = {
         "name": "Central Medical Center",
-        "city": "Sacramento, CA",
+        "city": "Boston, MA",
         "coordinates": {"lat": 42.3601, "lon": -71.0589},
-        "password": "securePass123"
+        "password": "pass123"
     }
     new_hosp = add_hospital(db, hospital_data)
     hosp_name = new_hosp["name"]
@@ -307,8 +313,9 @@ def main():
     # For each blood type, add 5 blood bags and set surplus flag to True.
     blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     for bt in blood_types:
-        update_hospital_inventory(db, hosp_name, hosp_city, bt, 5)
-        update_inventory_flag(db, hosp_name, hosp_city, bt, surplus=True, shortage=False)
+        # Use the hospital's password ("pass123" in this example) for authentication.
+        update_hospital_inventory(db, hosp_name, hosp_city, bt, 5, password="pass123")
+        update_inventory_flag(db, hosp_name, hosp_city, bt, surplus=True, shortage=False, password="pass123")
     
     update_secondary_data(db)
     
@@ -331,12 +338,12 @@ def main():
     add_donor_and_update(db, donor)
     
     # Example: Remove a donor.
-    remove_donor_and_update(db, "P1111111")
+    #remove_donor_and_update(db, "P1111111")
     
-    # Example: Update hospital inventory.
-    update_hospital_inventory(db, hosp_name, hosp_city, "O+", 2)
+    # Example: Update hospital inventory (requires password).
+    update_hospital_inventory(db, hosp_name, hosp_city, "O+", 2, password="pass123")
     
-    # Example: Search for the new hospital in the secondary collection.
+    # Example: Search for the hospital in the secondary collection.
     result = search_secondary(db, hosp_name, hosp_city)
     print(f"\nSearch result for {hosp_name} in {hosp_city}:")
     print(result)
