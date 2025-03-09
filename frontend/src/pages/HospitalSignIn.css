@@ -1,7 +1,7 @@
 /* General Body Styling */
 body {
-  background-color: #f4f4f9; /* Light gray background */
-  font-family: "Roboto", sans-serif; /* Clean, modern font */
+  background-color: #f4f4f9;
+  font-family: "Roboto", sans-serif; 
   margin: 0;
   padding: 0;
   display: flex;
@@ -13,20 +13,20 @@ body {
 /* Form Container */
 .form-container {
   width: 100%;
-  max-width: 400px; /* Restrict the form width */
+  max-width: 400px; 
   padding: 20px;
-  background: #fff; /* White form background */
+  background: #fff; 
   border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Subtle shadow for elevation */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
   text-align: center;
-  border: 1px solid #ddd; /* Optional border for clarity */
+  border: 1px solid #ddd; 
 }
 
 /* Form Header */
 .form-header {
-  font-size: 24px; /* Larger font for the title */
-  color: #d9534f; /* Red accent for emphasis */
-  margin-bottom: 20px; /* Spacing below the header */
+  font-size: 24px; 
+  color: #d9534f; 
+  margin-bottom: 20px; 
 }
 
 /* Form Inputs */
@@ -35,52 +35,51 @@ body {
   padding: 10px;
   font-size: 16px;
   margin-bottom: 15px;
-  border: 1px solid #ddd; /* Neutral border */
-  border-radius: 5px; /* Rounded edges */
-  transition: border-color 0.3s ease; /* Smooth transition for focus state */
+  border: 1px solid #ddd; 
+  border-radius: 5px; 
+  transition: border-color 0.3s ease; 
 }
 
 .form-input:focus {
-  border-color: #d9534f; /* Highlight red on focus */
-  outline: none; /* Remove default outline */
+  border-color: #d9534f; 
+  outline: none; 
 }
 
 /* Form Button */
 .form-button {
   width: 100%;
   padding: 10px 15px;
-  font-size: 18px; /* Slightly larger text */
-  background-color: #d9534f; /* Primary red color */
-  color: #fff; /* White text */
+  font-size: 18px; 
+  background-color: #d9534f; 
+  color: #fff; 
   border: none;
-  border-radius: 5px; /* Rounded edges */
+  border-radius: 5px; 
   cursor: pointer;
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .form-button:hover {
   background-color: #b52b2b; /* Darker red on hover */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); /* Slight elevation effect */
-}
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); 
 
 .form-button:disabled {
-  background-color: #ddd; /* Gray color for disabled state */
-  cursor: not-allowed; /* Show disabled cursor */
+  background-color: #ddd; 
+  cursor: not-allowed; 
 }
 
 /* Form Messages */
 .form-message {
   margin-top: 15px;
   font-size: 14px;
-  color: #333; /* Neutral text color */
+  color: #333; 
 }
 
 .form-message.error {
-  color: #a94442; /* Red for error messages */
+  color: #a94442; 
 }
 
 .form-message.success {
-  color: #3c763d; /* Green for success messages */
+  color: #3c763d; 
 }
 
 /* Mobile Responsiveness */
@@ -91,7 +90,7 @@ body {
   }
 
   .form-header {
-    font-size: 20px; /* Slightly smaller for mobile */
+    font-size: 20px; 
   }
 
   .form-button {
