@@ -7,7 +7,7 @@ const GEOCODING_API_URL = "https://api.opencagedata.com/geocode/v1/json";
 
 const Hsignup = () => {
     const [formData, setFormData] = useState({
-        email: "",
+        hospitalName: "", // Added hospital name field
         zipCode: "",
         password: "",
     });
@@ -24,11 +24,21 @@ const Hsignup = () => {
         setError("");
         setMessage("");
 
-        const { zipCode } = formData;
+        const { zipCode, password, hospitalName } = formData; // Include hospitalName
+
         if (!zipCode) {
             setError("Zip code is required.");
             return;
         }
+        if (!hospitalName) {
+            setError("Hospital name is required.");
+            return;
+        }
+        if (!password) {
+            setError("Password is required.");
+            return;
+        }
+
 
         try {
             const geocodeResponse = await fetch(`${GEOCODING_API_URL}?q=${zipCode}&key=${GEOCODING_API_KEY}`);
@@ -44,12 +54,14 @@ const Hsignup = () => {
 
             const { lat, lng } = geocodeData.results[0].geometry;
             const updatedFormData = {
-                ...formData,
-                latitude: lat,
-                longitude: lng,
+                name: hospitalName, // Use hospitalName for 'name' field
+                city: zipCode,      // Use zipCode for 'city' field as requested
+                coordinates: { lat: lat, lon: lng },
+                password: password,
+                // flagSettings: {} // Optional flagSettings can be added here if needed, e.g., from form inputs
             };
 
-            const signupResponse = await fetch("http://localhost:5001/api/signup", {
+            const signupResponse = await fetch("http://localhost:5001/hospital/create", { // Updated endpoint
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,25 +85,26 @@ const Hsignup = () => {
     };
 
     if (redirect) {
-        window.location.href = "/login";
+        window.location.href = "/login"; // Or wherever you want to redirect after signup
     }
 
     return (
         <Container fluid className="hsignup-page">
             <Row className="justify-content-center align-items-center h-100">
-                <Col md={6} lg={5}> {/* Reduced column size here: md={3} lg={2} */}
+                <Col md={6} lg={5}>
                     <Container className="hsignup-form-container p-4 rounded shadow-lg">
                         <h2 className="text-center mb-4 text-danger">Hospital Sign Up</h2>
                         {error && <Alert variant="danger" className="mb-3">{error}</Alert>}
                         {message && <Alert variant="success" className="mb-3">{message}</Alert>}
                         <Form onSubmit={handleSubmit}>
-                            <FormGroup className="mb-3" controlId="formEmail">
-                                <FormLabel className="text-danger">Email address</FormLabel>
+                            {/* New Hospital Name Field */}
+                            <FormGroup className="mb-3" controlId="formHospitalName">
+                                <FormLabel className="text-danger">Hospital Name</FormLabel>
                                 <FormControl
-                                    type="email"
-                                    name="email"
-                                    placeholder="Enter email"
-                                    value={formData.email}
+                                    type="text"
+                                    name="hospitalName"
+                                    placeholder="Enter Hospital Name"
+                                    value={formData.hospitalName}
                                     onChange={handleChange}
                                     required
                                     className="form-control-red-border"

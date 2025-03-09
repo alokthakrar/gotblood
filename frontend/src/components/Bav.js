@@ -12,7 +12,7 @@ function NavTop() {
     >
       <Container>
         <Navbar.Brand href="#home" style={{ color: 'white' }}>
-          React-Bootstrap
+          got blood?
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">

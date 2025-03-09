@@ -58,9 +58,17 @@ const FitMapBounds = ({ locations }) => {
 const HospitalMap = () => {
     const [data, setData] = useState([]);
     const [mapHospitals, setMapHospitals] = useState([]); // State for map-ready hospital data
-    const [hospitalMatches, setHospitalMatches] = useState({}); // State to store API matches
+    const [surplusMatches, setSurplusMatches] = useState([]); // State for surplus matches
+    const [loadingMatches, setLoadingMatches] = useState(false);
+    const [matchError, setMatchError] = useState(null);
 
-    useEffect(() => {
+    // **Define Shortage Hospital Details Here** - Make Dynamic Later if Needed
+    const shortageHospitalName = "General Hospital 1"; // Example shortage hospital
+    const shortageCityState = "Los Angeles, CA"; // Example shortage city/state
+    const bloodTypeForMatching = "O+"; // Example blood type for matching
+    const maxMatchingResults = 5; // Example max ¿
+    
+  useEffect(() => {
         const fetchDataAsync = async () => { // Wrap fetchData in an async function
             try {
                 const response = await fetch('http://localhost:5001/hospital/dataLoc');
@@ -71,10 +79,8 @@ const HospitalMap = () => {
                 setData(jsonData);
                 console.log("Fetched JSON Data for Map:", jsonData); // Log fetched data
 
-                // **Data Transformation and Matching API Calls:** Prepare data for the map
+                // **Data Transformation:** Prepare data for the map (same as before)
                 const transformedHospitals = [];
-                const matches = {}; // Object to store matches temporarily
-
                 for (const hospitalEntry of jsonData) {
                     const hospitalName = hospitalEntry.hospital;
                     const cityState = `${hospitalEntry.city}`;
@@ -94,42 +100,69 @@ const HospitalMap = () => {
                         cityState: cityState,
                         bloodTypes: bloodDataArray
                     });
-
-                    // **Call Matching API for each hospital**
-                    try {
-                        const matchResponse = await fetch(
-                            `http://localhost:5001/hospital/matching/shortage?surplus_hospital=${encodeURIComponent(hospitalName)}&surplus_city=${encodeURIComponent(cityState)}&blood_type=O+` // Using 'O+' as default blood type for matching
-                        );
-                        if (matchResponse.ok) {
-                            const matchData = await matchResponse.json();
-                            matches[hospitalName] = matchData; // Store matches with hospital name as key
-                            console.log(`Matches for ${hospitalName}:`, matchData);
-                        } else {
-                            console.warn(`Matching API failed for ${hospitalName}: Status ${matchResponse.status}`);
-                            matches[hospitalName] = []; // Store empty array if API call fails
-                        }
-                    } catch (matchError) {
-                        console.error(`Error calling matching API for ${hospitalName}:`, matchError);
-                        matches[hospitalName] = []; // Store empty array on error
-                    }
                 }
                 setMapHospitals(transformedHospitals);
-                setHospitalMatches(matches); // Set the matches state after processing all hospitals
+
 
             } catch (error) {
                 console.error("Error fetching hospital data:", error);
                 setData([]);
                 setMapHospitals([]);
-                setHospitalMatches({}); // Clear matches on error
             }
         };
 
+        const fetchSurplusData = async () => {
+            setLoadingMatches(true);
+            setMatchError(null);
+            try {
+                // Build URL for surplus matching
+                /*
+                const shortageHospitalEncoded = encodeURIComponent(shortageHospitalName);
+                const shortageCityEncoded = encodeURIComponent(shortageCityState);
+                const bloodTypeEncoded = encodeURIComponent(bloodTypeForMatching);
+                const url = `http://localhost:5001/hospital/matching/surplus?shortage_hospital=${shortageHospitalEncoded}&shortage_city=${shortageCityEncoded}&blood_type=${bloodTypeEncoded}&max_results=${maxMatchingResults}`;
+                */
+                const surplusHospitalEncoded = encodeURIComponent("Central Medical Center"); // Match curl value
+                const surplusCityEncoded = encodeURIComponent("Boston, MA"); // Match curl value
+                const bloodTypeEncoded = encodeURIComponent("A+");
+                const maxResults = 5;
+                
+                // Use /hospital/matching/shortage endpoint (match curl)
+                const url = `http://localhost:5001/hospital/matching/shortage?surplus_hospital=${surplusHospitalEncoded}&surplus_city=${surplusCityEncoded}&blood_type=${bloodTypeEncoded}&max_results=${maxResults}`;
+                const matchResponse = await fetch(url);
+                if (!matchResponse.ok) {
+                    throw new Error(`Matching API Error: ${matchResponse.status}`);
+                }
+                const matchData = await matchResponse.json();
+                setSurplusMatches(matchData);
+                console.log("Surplus Matches Fetched:", matchData);
+            } catch (err) {
+                setMatchError(err.message);
+                console.error("Error fetching surplus matches:", err);
+                setSurplusMatches([]); // Clear matches on error
+            } finally {
+                setLoadingMatches(false);
+            }
+        };
+
+
         fetchDataAsync();
+        fetchSurplusData(); // Fetch surplus matches when component mounts
+
     }, []);
+
+
+    // Find coordinates of the shortage hospital
+    const shortageHospitalInfo = mapHospitals.find(h => h.name === shortageHospitalName && h.cityState === shortageCityState);
+    const shortageHospitalCoords = shortageHospitalInfo ? shortageHospitalInfo.coords : null;
 
 
     return (
         <div className="map-wrapper">
+            <h2>Hospital Blood Supply Map</h2>
+            {matchError && <p style={{ color: 'red' }}>Error fetching matches: {matchError}</p>}
+            {loadingMatches && <p>Loading surplus hospital matches...</p>}
+
             <MapContainer
                 center={[37.0902, -95.7129]}
                 zoom={4}
@@ -178,30 +211,26 @@ const HospitalMap = () => {
                     }
                 })}
 
-                {/* **Render Arrows for Matches** */}
-                {mapHospitals.map((hospital, index) => {
-                    const matchesForHospital = hospitalMatches[hospital.name] || []; // Get matches for this hospital
-                    return matchesForHospital.map((match, matchIndex) => {
-                        const matchedHospitalCoords = match.coordinates; // Assuming match object has coordinates
-                        if (matchedHospitalCoords && hospital.coords && hospital.coords[0] !== 0 && hospital.coords[1] !== 0 && matchedHospitalCoords.lat !== 0 && matchedHospitalCoords.lon !== 0) {
-                            const arrowPoints = [hospital.coords, [matchedHospitalCoords.lat, matchedHospitalCoords.lon]];
-                            return (
-                                <Polyline
-                                    key={`${index}-match-${matchIndex}`}
-                                    positions={arrowPoints}
-                                    color="blue" // Customize arrow color
-                                    weight={2}     // Customize arrow weight
-                                    opacity={0.7}    // Customize arrow opacity
-                                    dashArray="4"   // Optional: dashed line style
-                                >
-                                    <Popup>
-                                        {`Match from ${hospital.name} to ${match.hospital} for blood type O+`} {/* Customize popup content */}
-                                    </Popup>
-                                </Polyline>
-                            );
-                        }
-                        return null; // Don't render arrow if coordinates are missing or invalid
-                    });
+                {/* **Render Arrows for Surplus Matches** */}
+                {surplusMatches.map((match, matchIndex) => {
+                    const matchedHospitalCoords = match.coordinates; // Coordinates of surplus hospital
+                    if (shortageHospitalCoords && matchedHospitalCoords && shortageHospitalCoords[0] !== 0 && shortageHospitalCoords[1] !== 0 && matchedHospitalCoords.lat !== 0 && matchedHospitalCoords.lon !== 0) {
+                        const arrowPoints = [shortageHospitalCoords, [matchedHospitalCoords.lat, matchedHospitalCoords.lon]]; // From shortage to surplus
+                        return (
+                            <Polyline
+                                key={`surplus-match-${matchIndex}`}
+                                positions={arrowPoints}
+                                color="green" // Surplus arrows in green
+                                weight={3}
+                                opacity={0.8}
+                            >
+                                <Popup>
+                                    {`Potential Blood Supply from ${match.hospital} to ${shortageHospitalName} (Blood Type ${bloodTypeForMatching}) - Distance: ${match.distance_km} km`}
+                                </Popup>
+                            </Polyline>
+                        );
+                    }
+                    return null; // Don't render arrow if coordinates are missing
                 })}
 
 
