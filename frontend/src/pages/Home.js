@@ -1,6 +1,7 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
+import Footer from '../components/Footer';
 import HospitalMap from '../features/HospitalMap';
 import '../index.css';
 
@@ -11,11 +12,13 @@ const Home = () => {
       <Sidebar />
       <div className="main-content">
         <div className="header">
-          <h1 className="app-title">Got Blood?</h1>
-          <p className="subtitle">Streamlining blood donations across the country!</p>
+          <h4 className="app-title">Got Blood? We Do. Let’s Make Sure Everyone Does.</h4>
+          <p className="subtitle"><i>Track donations and shortages nationwide with our interactive map.</i></p>
         </div>
         <HospitalMap />
+        
       </div>
+      <Footer/>
     </div>
   );
 };

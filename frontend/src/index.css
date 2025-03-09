@@ -13,7 +13,7 @@
   color: white;
   height: 100vh;
   position: fixed;
-  top: 60px;
+  top: 100px;
   left: 0;
   border-right: 2px solid #ddd;
   transition: all 0.3s ease;
@@ -131,16 +131,15 @@
 /* Navbar - Lighter red & centered link */
 .navbar {
   background: #932d2d; /* Lighter red */
-  padding: 15px 0;
-  display: flex;
+  padding: 15px;
+  
   justify-content: flex-end; 
   align-items: center;
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  z-index: 1000;
-  font-size: 100px;
+  /*z-index: 1000;*/
 }
 
 .nav-links {
@@ -187,7 +186,7 @@
   padding: 20px;
   background: white;
   min-height: calc(100vh - 60px); /* Adjust for navbar height */
-  margin-top: 60px;
+  margin-top: 40px;
   padding-bottom: 80px; /* Ensure space for the footer */
 }
 
@@ -195,23 +194,47 @@ body, .home-container {
   margin: 0;
   padding-top: 60px; /* Adjust this if navbar height changes */
 }
-
-footer {
-  background-color: #f8f9fa;
-  padding: 10px 0;
+/* Footer Styling */
+.footer {
+  background-color: #9f9a9a; /* Matches navbar/sidebar */
+  color: rgb(5, 0, 0);
   text-align: center;
-  font-size: 14px;
+  padding: 20px 0;
+  width: 100%;
+  margin-top: auto;
 }
 
-footer .container {
+.footer-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 10px;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.footer p {
+  margin: 0;
+  font-size: 16px;
+}
+
+.footer a {
+  color: #932d2d; /* Light red/pinkish to match hover theme */
+  text-decoration: none;
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.footer a:hover {
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 @media (max-width: 768px) {
-  footer {
+  .footer {
     font-size: 12px;
+    padding: 15px 0;
   }
 }
 
