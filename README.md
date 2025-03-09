@@ -17,3 +17,5 @@
 
 ### **About Us**
 To learn more about our mission and how we're changing the game in blood donation, check out our [slide presentation](https://docs.google.com/presentation/d/1-NoRxK_QzmNcdKb5xkyn4vsOyh1L71y9LMDrlCir08E/edit#slide=id.g6d136aaa59_1_51).
+
+to run the back end run dataAuth.py then dataLong.py then flaskApp.py then feel free to take a look at the endpoints and exlpore suing curl request the backend/database  of this contains all the data nessesary and is ready to go
