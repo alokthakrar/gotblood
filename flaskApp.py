@@ -130,7 +130,7 @@ def hospital_data_endpoint():
      return Response(dumps(data), mimetype="application/json"), 200
 
 @app.route("/hospital/dataLoc", methods=["GET"])
-def hospital_data_endpoint():
+def hospitalinput():
      """
      Returns aggregated hospital data as JSON.
      """

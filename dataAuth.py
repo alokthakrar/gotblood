@@ -1,6 +1,7 @@
 # sampleData.py
 from pymongo import MongoClient
 from datetime import datetime
+from random import randint
 client = MongoClient("mongodb://localhost:27017")
 db = client["americanRedCrossDB"]
 
@@ -144,7 +145,7 @@ def generate_sample_inventory(db):
             bag = {
                 "bbid": bbid,
                 "donationType": "Whole Blood",
-                "quantityCC": 500,
+                "quantityCC": randint(-500, 500),
                 "bloodType": bt,
                 "available": True
             }
