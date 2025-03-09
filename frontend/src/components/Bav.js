@@ -17,7 +17,7 @@ function NavTop() {
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto">
-            <Nav.Link href="/home" style={{ color: 'white' }}>
+            <Nav.Link href="/" style={{ color: 'white' }}>
               Home
             </Nav.Link>
             <Nav.Link href="/filter" style={{ color: 'white' }}>

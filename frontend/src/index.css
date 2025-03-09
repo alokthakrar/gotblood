@@ -249,3 +249,18 @@ body, .home-container {
   width: auto;
   object-fit: contain;
 }
+
+/* Remove white margins from dropdown menu */
+.dropdown-menu {
+  padding: 0 !important; /* Remove padding */
+  margin: 0 !important;  /* Remove margin */
+  border: none !important; /* Optional: Remove border if it's contributing to the margin look */
+  border-radius: 0 !important; /* Optional: Remove border-radius if you want square corners */
+}
+
+/* If you removed padding from .dropdown-menu and items are too close together,
+   you can add some padding back to the dropdown items themselves */
+.dropdown-item {
+    padding-top: 0.25rem !important; /* Adjust as needed */
+    padding-bottom: 0.25rem !important; /* Adjust as needed */
+}
