@@ -186,6 +186,7 @@
   padding: 20px;
   background: white; /* White background for main content */
   min-height: 100vh;
+  margin-top: 60px;
 }
 
 body, .home-container {
