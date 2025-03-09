@@ -9,6 +9,8 @@ from hospital_matching import (
     match_donors_for_surplus
 )
 
+from hospital_data import get_complete_hospital_data
+
 app = Flask(__name__)
 
 # Connect to MongoDB
@@ -116,6 +118,14 @@ def donor_matching_surplus():
 
     matches = match_donors_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results)
     return Response(dumps(matches), mimetype="application/json"), 200
+
+@app.route("/hospital/data", methods=["GET"])
+def hospital_data_endpoint():
+     """
+     Returns aggregated hospital data as JSON.
+     """
+     data = get_complete_hospital_data(db)
+     return Response(dumps(data), mimetype="application/json"), 200
 
 @app.route("/test", methods=["GET"])
 def test_endpoint():
