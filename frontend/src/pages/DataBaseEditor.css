@@ -1,0 +1,168 @@
+import React, { useState } from "react";
+import axios from "axios";
+
+const SignIn = () => {
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    state: "",
+    hospitalName: "",
+    bloodAmount: 0,
+  });
+  const [message, setMessage] = useState("");
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const { email, password, state, hospitalName, bloodAmount } = formData;
+
+    if (!email || !password || !state || !hospitalName) {
+      setMessage("Please enter all required fields.");
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5001/api/login",
+        formData
+      );
+      setMessage(response.data.message);
+
+      if (response.data.success) {
+        setTimeout(() => {
+          window.location.href = "/dashboard"; // Redirect to the dashboard or home page
+        }, 2000);
+      }
+    } catch (error) {
+      setMessage(
+        error.response?.data?.error || "Login failed. Please try again."
+      );
+    }
+  };
+
+  const handleBloodChange = async (action) => {
+    try {
+      const response = await axios.post(
+        "http://localhost:5001/api/updateBlood",
+        {
+          hospitalName: formData.hospitalName,
+          state: formData.state,
+          bloodAmount: formData.bloodAmount,
+          action, // either 'add' or 'subtract'
+        }
+      );
+      setMessage(response.data.message);
+    } catch (error) {
+      setMessage(error.response?.data?.error || "Error updating blood.");
+    }
+  };
+
+  return (
+    <div className="container mt-5">
+      <div className="row justify-content-center">
+        <div className="col-md-6">
+          <div className="card shadow-lg">
+            <div className="card-body">
+              <h2 className="text-center mb-4">Sign In</h2>
+              <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                  <label htmlFor="email">Email</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    name="email"
+                    placeholder="Enter your email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="password">Password</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    name="password"
+                    placeholder="Enter your password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="state">State</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    name="state"
+                    placeholder="Enter state"
+                    value={formData.state}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="hospitalName">Hospital Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    name="hospitalName"
+                    placeholder="Enter hospital name"
+                    value={formData.hospitalName}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary btn-block mt-4">
+                  Sign In
+                </button>
+              </form>
+
+              {/* Blood Management Section */}
+              <div className="mt-4">
+                <h3 className="text-center">Blood Management</h3>
+                <div className="form-group">
+                  <label htmlFor="bloodAmount">Blood Amount</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    name="bloodAmount"
+                    placeholder="Enter amount of blood"
+                    value={formData.bloodAmount}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="d-flex justify-content-between">
+                  <button
+                    onClick={() => handleBloodChange("add")}
+                    className="btn btn-success"
+                  >
+                    Add Blood
+                  </button>
+                  <button
+                    onClick={() => handleBloodChange("subtract")}
+                    className="btn btn-danger"
+                  >
+                    Subtract Blood
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {message && <div className="alert alert-info mt-4">{message}</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SignIn;
