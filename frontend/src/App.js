@@ -5,6 +5,7 @@ import Home from './pages/Home';
 //import 'antd/dist/antd.css';
 //import Hospitals from './pages/Hospitals';
 import SignUp from './pages/SignUp'
+import FilterableHospitalTable from './pages/query/Query';
 //import About from './pages/About';
 
 const App = () => {
@@ -13,6 +14,7 @@ const App = () => {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/signup" element={<SignUp/>}/>
+      <Route path="/filter" element={<FilterableHospitalTable/>}/>
     </Routes>
   </Router>
 
