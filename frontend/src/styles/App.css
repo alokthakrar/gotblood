@@ -24,3 +24,37 @@
 .App-link {
   color: #a83232;
 }
+
+/* Footer.css */
+footer {
+  background-color: #f1f1f1; /* Light grey background */
+  padding: 20px 0;
+  text-align: center;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  font-family: Arial, sans-serif;
+  z-index: 10;
+}
+
+footer .container {
+  max-width: 1200px; /* Max width for container */
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+}
+
+footer a {
+  color: #007bff; /* Blue color for the link */
+  text-decoration: none; /* Remove underline */
+  margin-top: 10px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+footer a:hover {
+  text-decoration: underline; /* Underline the link when hovered */
+}
+

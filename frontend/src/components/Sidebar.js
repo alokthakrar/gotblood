@@ -68,7 +68,6 @@ const Sidebar = () => {
         <h4>🛠 Map Controls</h4>
         <ul>
           <li><strong>🔍 Zoom In/Out:</strong> Explore different locations.</li>
-          <li><strong>🖱 Hover Over Markers:</strong> View hospital details.</li>
           <li><strong>🩸 Click a Marker:</strong> Get detailed blood supply info.</li>
         </ul>
       </div>

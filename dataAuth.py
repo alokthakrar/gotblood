@@ -93,7 +93,7 @@ def generate_sample_donors(db):
         {
             "pid": "P0000005",
             "firstName": "Edward",
-            "lastName": "Norton",m
+            "lastName": "Norton",
             "age": 50,
             "role": "donor",
             "hospital": "Regional Medical Center",
