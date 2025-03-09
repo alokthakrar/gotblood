@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../styles/Map.css';
+import hospitalIconSrc from '../assets/hospital.png'; // Import your PNG hospital icon
 
 // Dummy hospital data (replace with real data later)
 const hospitals = [
@@ -11,50 +12,40 @@ const hospitals = [
   { id: 3, name: "Metro Health", coords: [34.0522, -118.2437], bloodType: 'O', shortageSeverity: 1.0 },
 ];
 
-// Utility function to convert hex color to RGB
-const hexToRgb = (hex) => {
-  // Remove '#' if present
-  hex = hex.replace('#', '');
-
-  // Convert 3-digit hex to 6-digit
-  if (hex.length === 3) {
-    hex = hex.split('').map(c => c + c).join('');
-  }
-
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  return [r, g, b];
+// Blood shortage severity colors (more intensity = higher severity)
+const getSeverityColor = (shortageSeverity) => {
+  if (shortageSeverity > 0.8) return '#ff0000'; // Red (Critical)
+  if (shortageSeverity > 0.5) return '#ff6600'; // Orange (Moderate)
+  if (shortageSeverity > 0.2) return '#ffcc00'; // Yellow (Low)
+  return '#66cc66'; // Green (No shortage)
 };
 
-// Function to determine marker color based on blood type and shortage severity
-const getMarkerColor = (bloodType, shortageSeverity) => {
-  let color = '';
+// Create custom hospital icon with shortage severity overlay
+const createHospitalIcon = (shortageSeverity) => {
+  const iconSize = 40; // Adjust the size for better visibility
 
-  // Blood type colors
-  switch (bloodType) {
-    case 'A':
-      color = '#ff7f00'; // Orange for A blood type
-      break;
-    case 'B':
-      color = '#ff0000'; // Red for B blood type
-      break;
-    case 'O':
-      color = '#ffcc00'; // Yellow for O blood type
-      break;
-    case 'AB':
-      color = '#00ff00'; // Green for AB blood type
-      break;
-    default:
-      color = '#cccccc'; // Default color if blood type is unknown
-      break;
-  }
-
-  const intensity = Math.max(0.2, shortageSeverity); // Set a minimum intensity for visibility
-  const [r, g, b] = hexToRgb(color); // Convert hex to RGB
-  const adjustedColor = [Math.floor(r * intensity), Math.floor(g * intensity), Math.floor(b * intensity)];
-  return `rgb(${adjustedColor.join(', ')})`; // Return a color string in rgb format
+  return L.divIcon({
+    className: 'custom-hospital-icon',
+    html: `
+      <div style="position: relative; width: ${iconSize}px; height: ${iconSize}px;">
+        <img src="${hospitalIconSrc}" style="width: 100%; height: 100%; display: block;" />
+        <div style="
+          position: absolute;
+          top: -5px;
+          right: -5px;
+          width: 15px;
+          height: 15px;
+          background-color: ${getSeverityColor(shortageSeverity)};
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        "></div>
+      </div>
+    `,
+    iconSize: [iconSize, iconSize], // Size of the icon
+    iconAnchor: [iconSize / 2, iconSize], // Anchor at bottom center
+    popupAnchor: [0, -iconSize / 2], // Adjust popup position
+  });
 };
 
 // Component to fit map view to markers
@@ -88,29 +79,23 @@ const HospitalMap = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
-        
-        {/* Add hospital markers */}
-        {hospitals.map((hospital) => {
-          const { bloodType, shortageSeverity } = hospital;
-          const markerColor = getMarkerColor(bloodType, shortageSeverity);
 
-          return (
-            <Marker
-              key={hospital.id}
-              position={hospital.coords}
-              icon={new L.DivIcon({
-                className: 'custom-marker',
-                html: `<div style="background-color:${markerColor}; width: 30px; height: 40px; border-radius: 50%;"></div>`,
-              })}
-            >
-              <Popup>
+        {/* Add hospital markers */}
+        {hospitals.map((hospital) => (
+          <Marker
+            key={hospital.id}
+            position={hospital.coords}
+            icon={createHospitalIcon(hospital.shortageSeverity)}
+          >
+            <Popup>
+              <div style={{ textAlign: 'center' }}>
                 <strong>{hospital.name}</strong> <br />
-                <p><strong>Blood Type Needed: {bloodType}</strong></p>
-                <p><strong>Severity:</strong> {Math.round(shortageSeverity * 100)}%</p>
-              </Popup>
-            </Marker>
-          );
-        })}
+                <p><strong>Blood Type Needed:</strong> {hospital.bloodType}</p>
+                <p><strong>Severity:</strong> {Math.round(hospital.shortageSeverity * 100)}%</p>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
 
         {/* Fit map to markers */}
         <FitMapBounds locations={hospitals.map(h => h.coords)} />
@@ -120,4 +105,3 @@ const HospitalMap = () => {
 };
 
 export default HospitalMap;
-
