@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-// You can use any geocoding API. I'll show an example with OpenCage Geocoder.
+//Opencage api
 const GEOCODING_API_KEY = "041a9e867a23424d9eb6586661af3d59"; // Replace with your API key
 const GEOCODING_API_URL = "https://api.opencagedata.com/geocode/v1/json";
 
