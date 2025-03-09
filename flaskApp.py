@@ -2,7 +2,6 @@
 from flask import Flask, request, Response
 from pymongo import MongoClient
 from bson.json_util import dumps
-from flask_cors import CORS
 from hospital_matching import (
     match_surplus_for_shortage,
     match_shortage_for_surplus,
@@ -11,9 +10,9 @@ from hospital_matching import (
 )
 
 from hospital_data import get_complete_hospital_data, get_complete_hospital_data_with_location
+from managementAuth import add_hospital, update_secondary_data, verify_auth0_user
 
 app = Flask(__name__)
-CORS(app)
 
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
@@ -130,12 +129,104 @@ def hospital_data_endpoint():
      return Response(dumps(data), mimetype="application/json"), 200
 
 @app.route("/hospital/dataLoc", methods=["GET"])
-def hospitalinput():
+def hospital_dataLoc_endpoint():
      """
      Returns aggregated hospital data as JSON.
      """
      data = get_complete_hospital_data_with_location(db)
      return Response(dumps(data), mimetype="application/json"), 200
+
+@app.route("/hospital/login", methods=["POST"])
+def hospital_login():
+     """
+     Expects JSON payload:
+     {
+       "hospital": "Central Medical Center",
+       "password": "pass123"
+     }
+     If authentication succeeds, returns a JSON response with an access token.
+     """
+     data = request.get_json(force=True)
+     if "hospital" not in data or "password" not in data:
+         return Response(dumps({"error": "Missing hospital or password"}), mimetype="application/json"), 400
+ 
+     hospital = data["hospital"]
+     password = data["password"]
+     auth_response = verify_auth0_user(hospital, password)
+     if auth_response:
+         # In TEST_MODE, we return a dummy token; in production, the actual JWT from Auth0.
+         return Response(
+             dumps({"message": "Login successful", "access_token": auth_response.get("access_token")}),
+             mimetype="application/json"
+         ), 200
+     else:
+         return Response(dumps({"error": "Invalid credentials"}), mimetype="application/json"), 401
+ 
+@app.route("/blood/update", methods=["POST"])
+def update_blood_inventory():
+     """
+     Expects JSON payload:
+     {
+        "hospital": "Central Medical Center",
+        "city": "Boston, MA",
+        "bloodType": "A+",
+        "delta_count": 5,  # positive to add, negative to remove
+        "password": "pass123"
+     }
+     Returns a JSON response.
+     """
+     try:
+         data = request.get_json(force=True)
+     except Exception as e:
+         return Response(dumps({"error": str(e)}), mimetype="application/json"), 400
+ 
+     required_fields = ["hospital", "city", "bloodType", "delta_count", "password"]
+     if not all(field in data for field in required_fields):
+         return Response(dumps({"error": "Missing required fields."}), mimetype="application/json"), 400
+ 
+     try:
+         delta_count = int(data["delta_count"])
+     except ValueError:
+         return Response(dumps({"error": "delta_count must be an integer."}), mimetype="application/json"), 400
+ 
+     # Call your update function from management module
+     from hospital_managment import update_hospital_inventory, update_secondary_data, search_secondary
+     update_hospital_inventory(db, data["hospital"], data["city"], data["bloodType"], delta_count, password=data["password"])
+     update_secondary_data(db)
+     updated = search_secondary(db, data["hospital"], data["city"])
+     return Response(dumps({"message": "Blood inventory updated successfully.", "updated_record": updated}),
+                     mimetype="application/json"), 200
+
+@app.route("/hospital/create", methods=["POST"])
+def create_hospital_endpoint():
+    """
+    Creates a new hospital. Expects JSON payload:
+    {
+      "name": "Hospital Example",
+      "city": "City, State",
+      "coordinates": {"lat": 40.7128, "lon": -74.0060},
+      "password": "yourPassword",
+      "flagSettings": {    // optional
+          "A+": {"surplus": true, "shortage": false},
+          "O+": {"surplus": false, "shortage": true},
+          ...
+      }
+    }
+    Registers the hospital with Auth0 and inserts it into the database.
+    """
+    data = request.get_json(force=True)
+    required_fields = ["name", "city", "coordinates", "password"]
+    if not all(field in data for field in required_fields):
+        return Response(dumps({"error": "Missing required fields: name, city, coordinates, and password"}), mimetype="application/json"), 400
+
+    new_hosp = add_hospital(db, data)
+    if new_hosp is None:
+        return Response(dumps({"error": "Hospital creation failed."}), mimetype="application/json"), 500
+    
+    # Optionally update aggregated data.
+    update_secondary_data(db)
+    return Response(dumps({"message": f"Hospital '{new_hosp['name']}' created successfully.", "hospital": new_hosp}), mimetype="application/json"), 201
+
 
 @app.route("/test", methods=["GET"])
 def test_endpoint():
