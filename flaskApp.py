@@ -4,15 +4,20 @@ from pymongo import MongoClient
 from bson.json_util import dumps
 from hospital_data import get_complete_hospital_data
 from hospital_matching import match_hospital_with_shortage_to_surplus
+<<<<<<< HEAD
 from mailchimp_marketing import Client
 from mailchimp_marketing.api_client import ApiClientError
 
+=======
+from managementAuth import verify_auth0_user
+>>>>>>> cff4e4ea5b31750fca1e814eaa4cbc0e89a9b513
 
 app = Flask(__name__)
 CORS(app)
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
 db = client["americanRedCrossDB"]
+<<<<<<< HEAD
 
 
 # Mailchimp Configuration
@@ -55,6 +60,8 @@ def signup():
     except Exception as e:
         print(f"Signup error: {e}")
         return jsonify({"error": "Signup failed due to an unexpected error."}), 500
+=======
+>>>>>>> cff4e4ea5b31750fca1e814eaa4cbc0e89a9b513
 
 @app.route("/hospital/data", methods=["GET"])
 def hospital_data_endpoint():
@@ -123,6 +130,33 @@ def hospital_matching_endpoint():
 
     matches = match_hospital_with_shortage_to_surplus(db, shortage_hospital, shortage_city, blood_type, max_results)
     return Response(dumps(matches), mimetype="application/json"), 200
+
+@app.route("/hospital/login", methods=["POST"])
+def hospital_login():
+    """
+    Expects JSON payload:
+    {
+      "hospital": "Central Medical Center",
+      "password": "pass123"
+    }
+    If authentication succeeds, returns a JSON response with an access token.
+    """
+    data = request.get_json(force=True)
+    if "hospital" not in data or "password" not in data:
+        return Response(dumps({"error": "Missing hospital or password"}), mimetype="application/json"), 400
+
+    hospital = data["hospital"]
+    password = data["password"]
+    auth_response = verify_auth0_user(hospital, password)
+    if auth_response:
+        # In TEST_MODE, we return a dummy token; in production, the actual JWT from Auth0.
+        return Response(
+            dumps({"message": "Login successful", "access_token": auth_response.get("access_token")}),
+            mimetype="application/json"
+        ), 200
+    else:
+        return Response(dumps({"error": "Invalid credentials"}), mimetype="application/json"), 401
+
 
 @app.route("/test", methods=["GET"])
 def test_endpoint():
