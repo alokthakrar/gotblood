@@ -140,10 +140,23 @@ def aggregate_inventory_by_location(db):
     return list(db.globalInventory.aggregate(pipeline))
 
 def merge_secondary_data(donor_stats, inventory_stats):
-    inv_lookup = {(doc["hospital"], doc["city"]): doc["inventoryStats"] for doc in inventory_stats}
+    """
+    Merges the donor_stats and inventory_stats based on hospital and city.
+    This version safely checks for the keys "hospital" and "city" in each document.
+    """
+    inv_lookup = {}
+    for doc in inventory_stats:
+        hospital = doc.get("hospital")
+        city = doc.get("city")
+        if hospital is not None and city is not None:
+            inv_lookup[(hospital, city)] = doc.get("inventoryStats", [])
+    
     merged = []
     for stat in donor_stats:
-        key = (stat["hospital"], stat["city"])
+        hospital = stat.get("hospital")
+        city = stat.get("city")
+        key = (hospital, city)
+        # If keys don't exist, default to an empty list.
         stat["inventoryStats"] = inv_lookup.get(key, [])
         merged.append(stat)
     return merged
@@ -159,27 +172,41 @@ def update_secondary_data(db):
     
     complete_blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
     hospitals = list(db.locations.find())
-    merged_dict = {(rec["hospital"], rec["city"]): rec for rec in merged_data}
     
+    # Build lookup only for records that have both 'hospital' and 'city'
+    merged_dict = {
+        (rec.get("hospital"), rec.get("city")): rec
+        for rec in merged_data
+        if rec.get("hospital") is not None and rec.get("city") is not None
+    }
+    
+    # Preserve existing flags if any
     existing_flags = {}
     for rec in db.donorStats.find():
-        key = (rec["hospital"], rec["city"])
+        key = (rec.get("hospital"), rec.get("city"))
+        if not key[0] or not key[1]:
+            continue
         flags = {}
         for bt in rec.get("bloodTypeStats", []):
-            flags[bt["bloodType"]] = (bt.get("surplus", False), bt.get("shortage", False))
+            flags[bt.get("bloodType")] = (bt.get("surplus", False), bt.get("shortage", False))
         existing_flags[key] = flags
     
     for hosp in hospitals:
-        key = (hosp["name"], hosp["city"])
+        key = (hosp.get("name"), hosp.get("city"))
         if key not in merged_dict:
-            merged_dict[key] = {"hospital": hosp["name"], "city": hosp["city"],
+            merged_dict[key] = {"hospital": hosp.get("name"), "city": hosp.get("city"),
                                 "bloodTypeStats": [], "inventoryStats": []}
         record = merged_dict[key]
         new_bt_stats = []
+        # Use flagSettings from hospital document if available
+        flag_settings = hosp.get("flagSettings", {})  # e.g. {"A+": {"surplus": True, "shortage": False}, ...}
         for bt in complete_blood_types:
-            computed = next((item for item in record.get("bloodTypeStats", []) if item["bloodType"] == bt), None)
-            donorCount = computed["donorCount"] if computed else 0
-            flags = existing_flags.get(key, {}).get(bt, (False, False))
+            computed = next((item for item in record.get("bloodTypeStats", []) if item.get("bloodType") == bt), None)
+            donorCount = computed.get("donorCount") if computed else 0
+            if bt in flag_settings:
+                flags = (flag_settings[bt].get("surplus", False), flag_settings[bt].get("shortage", False))
+            else:
+                flags = existing_flags.get(key, {}).get(bt, (False, False))
             new_bt_stats.append({
                 "bloodType": bt,
                 "donorCount": donorCount,
@@ -190,8 +217,8 @@ def update_secondary_data(db):
         
         new_inv_stats = []
         for bt in complete_blood_types:
-            computed_inv = next((item for item in record.get("inventoryStats", []) if item["bloodType"] == bt), None)
-            totalBloodCC = computed_inv["totalBloodCC"] if computed_inv else 0
+            computed_inv = next((item for item in record.get("inventoryStats", []) if item.get("bloodType") == bt), None)
+            totalBloodCC = computed_inv.get("totalBloodCC") if computed_inv else 0
             new_inv_stats.append({
                 "bloodType": bt,
                 "totalBloodCC": totalBloodCC
@@ -201,6 +228,7 @@ def update_secondary_data(db):
     completed_merged_data = list(merged_dict.values())
     create_secondary_collection(db, completed_merged_data)
     print("Secondary collection 'donorStats' updated with complete data.")
+
 
 #######################################
 # Donor and Inventory Management Functions (with Auth0 integration)
