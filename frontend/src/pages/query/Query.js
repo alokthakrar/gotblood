@@ -30,12 +30,7 @@ function FilterableHospitalTable() {
         fetchData();
     }, []);
     const filteredData = data.filter(item => {
-        if (Array.isArray(item) && item.length > 0 && typeof item[0] === 'string') { // Check if item is array, has at least one element, and the first element is a string
-            return item[0].toLowerCase().includes(searchQuery.toLowerCase()); // Filter based on the FIRST element (hospital name)
-        } else {
-            console.warn("Skipping item in filter: Item is not a valid array or hospital name missing:", item);
-            return false; // Skip invalid array items during filtering
-        }
+            return item.hospital.toLowerCase().includes(searchQuery.toLowerCase()); // Filter based on the FIRST element (hospital name)
     }); 
     return (
         <Container className="mt-4">
@@ -68,9 +63,9 @@ function FilterableHospitalTable() {
                     <tbody>
                         {filteredData.map((item, index) => (
                             <tr key={index}>
-                                <td>{item[0]}</td> 
-                                <td>{item[1]}</td>      
-                                <td>{item[2]}</td>
+                                <td>{item.hospital}</td> 
+                                <td>{item.city}</td>      
+                                <td>{item.hospital}</td>
                                 <td>{item.delta_count}</td>
                             </tr>
                         ))}
