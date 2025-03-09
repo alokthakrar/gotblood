@@ -10,6 +10,7 @@ def generate_sample_hospitals(db):
     Inserts 5 manually defined hospitals with plain text passwords,
     and registers them with Auth0 using the hospital name as username.
     """
+    
     hospitals = [
         {"name": "Central Medical Center", "city": "Boston, MA", "coordinates": {"lat": 42.3601, "lon": -71.0589}, "password": "pass123"},
         {"name": "General Hospital 1", "city": "Los Angeles, CA", "coordinates": {"lat": 34.0522, "lon": -118.2437}, "password": "securePass"},

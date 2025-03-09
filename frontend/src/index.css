@@ -13,8 +13,7 @@
   color: white;
   height: 100vh;
   position: fixed;
-  top: 100px;
-  left: 0;
+  top: 50px;
   border-right: 2px solid #ddd;
   transition: all 0.3s ease;
 }
@@ -131,8 +130,7 @@
 /* Navbar - Lighter red & centered link */
 .navbar {
   background: #932d2d; /* Lighter red */
-  padding: 15px;
-  
+  padding: 15px; 
   justify-content: flex-end; 
   align-items: center;
   position: fixed;

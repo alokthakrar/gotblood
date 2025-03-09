@@ -1,5 +1,5 @@
 import React from 'react';
-import Navbar from '../components/Navbar';
+import Navbar from '../components/Bav';
 import Sidebar from '../components/Sidebar';
 import Footer from '../components/Footer';
 import HospitalMap from '../features/HospitalMap';
@@ -8,7 +8,7 @@ import '../index.css';
 const Home = () => {
   return (
     <div className="home-container">
-      <Navbar />
+
       <Sidebar />
       <div className="main-content">
         <div className="header">

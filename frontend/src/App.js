@@ -6,10 +6,13 @@ import Home from './pages/Home';
 //import Hospitals from './pages/Hospitals';
 import SignUp from './pages/SignUp'
 import FilterableHospitalTable from './pages/query/Query';
+import NavTop from './components/Bav';
 //import About from './pages/About';
 
 const App = () => {
   return (
+    <>
+    <NavTop/>
     <Router>
     <Routes>
       <Route path="/" element={<Home />} />
@@ -17,6 +20,7 @@ const App = () => {
       <Route path="/filter" element={<FilterableHospitalTable/>}/>
     </Routes>
   </Router>
+  </>
 
  
   );
