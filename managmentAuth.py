@@ -9,11 +9,10 @@ import requests
 # Auth0 Configuration and Helper Functions (Integrated)
 #######################################
 
-# Replace these values with your Auth0 configuration if needed.
-auth0_domain = "dev-nzbenqyyuji62b1n.us.auth0.com"  # Your Auth0 domain
-auth0_client_id = "zVcYBqZQsx6d9mEwEaW1zQxT9gEiKHnA"  # Your Auth0 client ID
-auth0_client_secret = "zxMUC-ND13MaB-2ED-_I0IZmlJHxbIJqiNehJCEhCrpi2diKEwQ9e-tqZIWos9gn"  # Your Auth0 client secret
-auth0_audience = "https://PassWordManager.com"  # Your Auth0 API identifier
+auth0_domain = "dev-ad14rnf5k6iwyi22.us.auth0.com"  # Your Auth0 domain
+auth0_client_id = "DKtSjVvqZ08VmXoOOAlNiCbHNRXiqIWu"  # Your Auth0 client ID
+auth0_client_secret = "IhlJLDVqyrQkI_fTXp6Gwa-yLPShxH3I6Z98c9SCUwreuMMMjR-YwxMpOGzfh8EV"  # Your Auth0 client secret
+auth0_audience = "https://password.com/"  # Your Auth0 API identifier
 auth0_token_url = f"https://{auth0_domain}/oauth/token"
 
 # Set TEST_MODE to True to bypass real Auth0 calls for local testing.
