@@ -2,6 +2,7 @@
 from flask import Flask, request, Response
 from pymongo import MongoClient
 from bson.json_util import dumps
+from flask_cors import CORS
 from hospital_matching import (
     match_surplus_for_shortage,
     match_shortage_for_surplus,
@@ -12,6 +13,7 @@ from hospital_matching import (
 from hospital_data import get_complete_hospital_data
 
 app = Flask(__name__)
+CORS(app)
 
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
