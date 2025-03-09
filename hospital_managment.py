@@ -1,197 +1,352 @@
-# hospital_matching.py
+# hospital_managment.py
 from pymongo import MongoClient
+from datetime import datetime
 import math
+import random
+import bcrypt
 
-def haversine_distance(lat1, lon1, lat2, lon2):
-    """
-    Computes the Haversine distance (in kilometers) between two latitude/longitude points.
-    """
-    R = 6371  # Earth's radius in kilometers
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+#######################################
+# Helper functions for password handling
+#######################################
 
-# ----- Hospital Matching Functions -----
+def hash_password(plain_password):
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(plain_password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
 
-def match_surplus_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5):
-    """
-    For a hospital with a shortage of a given blood type, finds up to max_results hospitals
-    (other than the shortage hospital) that have a surplus for that blood type.
-    Returns a list of dictionaries:
-      { "hospital": <name>, "city": <city>, "distance_km": <distance> }
-    """
-    # Get shortage hospital location.
-    sh_loc = db.locations.find_one({"name": shortage_hospital, "city": shortage_city})
-    if not sh_loc or "coordinates" not in sh_loc:
-        print("Shortage hospital location not found!")
-        return []
-    sh_lat = sh_loc["coordinates"]["lat"]
-    sh_lon = sh_loc["coordinates"]["lon"]
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-    surplus_records = list(db.donorStats.find({
-        "bloodTypeStats": {"$elemMatch": {"bloodType": blood_type, "surplus": True}}
-    }))
+#######################################
+# Aggregation & Update Functions (Internal)
+#######################################
 
-    matching_hospitals = []
-    for record in surplus_records:
-        if record["hospital"] == shortage_hospital and record["city"] == shortage_city:
-            continue  # skip the same hospital
-        sp_loc = db.locations.find_one({"name": record["hospital"], "city": record["city"]})
-        if not sp_loc or "coordinates" not in sp_loc:
-            continue
-        distance = haversine_distance(sh_lat, sh_lon, sp_loc["coordinates"]["lat"], sp_loc["coordinates"]["lon"])
-        matching_hospitals.append({
-            "hospital": record["hospital"],
-            "city": record["city"],
-            "distance_km": round(distance, 2)
-        })
-    matching_hospitals.sort(key=lambda x: x["distance_km"])
-    return matching_hospitals[:max_results]
+def aggregate_donor_data_by_location(db):
+    pipeline = [
+        {"$match": {"role": "donor"}},
+        {"$group": {
+            "_id": {
+                "hospital": "$hospital",
+                "city": "$city",
+                "bloodType": "$donorDetails.bloodType"
+            },
+            "donorCount": {"$sum": 1}
+        }},
+        {"$group": {
+            "_id": {"hospital": "$_id.hospital", "city": "$_id.city"},
+            "bloodTypeStats": {"$push": {
+                "bloodType": "$_id.bloodType",
+                "donorCount": "$donorCount",
+                "surplus": False,
+                "shortage": False
+            }}
+        }},
+        {"$project": {
+            "_id": 0,
+            "hospital": "$_id.hospital",
+            "city": "$_id.city",
+            "bloodTypeStats": 1
+        }}
+    ]
+    return list(db.persons.aggregate(pipeline))
 
-def match_shortage_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5):
-    """
-    For a hospital with a surplus of a given blood type, finds up to max_results hospitals
-    (other than the surplus hospital) that have a shortage for that blood type.
-    Returns a list of dictionaries:
-      { "hospital": <name>, "city": <city>, "distance_km": <distance> }
-    """
-    sp_loc = db.locations.find_one({"name": surplus_hospital, "city": surplus_city})
-    if not sp_loc or "coordinates" not in sp_loc:
-        print("Surplus hospital location not found!")
-        return []
-    sp_lat = sp_loc["coordinates"]["lat"]
-    sp_lon = sp_loc["coordinates"]["lon"]
+def aggregate_inventory_by_location(db):
+    pipeline = [
+        {"$lookup": {
+            "from": "bloodBags",
+            "localField": "bbid",
+            "foreignField": "bbid",
+            "as": "bag"
+        }},
+        {"$unwind": "$bag"},
+        {"$lookup": {
+            "from": "locations",
+            "localField": "lid",
+            "foreignField": "lid",
+            "as": "loc"
+        }},
+        {"$unwind": "$loc"},
+        {"$match": {"available": True}},
+        {"$group": {
+            "_id": {"hospital": "$loc.name", "city": "$loc.city", "bloodType": "$bag.bloodType"},
+            "totalBloodCC": {"$sum": "$bag.quantityCC"}
+        }},
+        {"$group": {
+            "_id": {"hospital": "$_id.hospital", "city": "$_id.city"},
+            "inventoryStats": {"$push": {
+                "bloodType": "$_id.bloodType",
+                "totalBloodCC": "$totalBloodCC"
+            }}
+        }},
+        {"$project": {
+            "_id": 0,
+            "hospital": "$_id.hospital",
+            "city": "$_id.city",
+            "inventoryStats": 1
+        }}
+    ]
+    return list(db.globalInventory.aggregate(pipeline))
 
-    shortage_records = list(db.donorStats.find({
-        "bloodTypeStats": {"$elemMatch": {"bloodType": blood_type, "shortage": True}}
-    }))
+def merge_secondary_data(donor_stats, inventory_stats):
+    inv_lookup = {(doc["hospital"], doc["city"]): doc["inventoryStats"] for doc in inventory_stats}
+    merged = []
+    for stat in donor_stats:
+        key = (stat["hospital"], stat["city"])
+        stat["inventoryStats"] = inv_lookup.get(key, [])
+        merged.append(stat)
+    return merged
 
-    matching_hospitals = []
-    for record in shortage_records:
-        if record["hospital"] == surplus_hospital and record["city"] == surplus_city:
-            continue  # skip same hospital
-        sh_loc = db.locations.find_one({"name": record["hospital"], "city": record["city"]})
-        if not sh_loc or "coordinates" not in sh_loc:
-            continue
-        distance = haversine_distance(sp_lat, sp_lon, sh_loc["coordinates"]["lat"], sh_loc["coordinates"]["lon"])
-        matching_hospitals.append({
-            "hospital": record["hospital"],
-            "city": record["city"],
-            "distance_km": round(distance, 2)
-        })
-    matching_hospitals.sort(key=lambda x: x["distance_km"])
-    return matching_hospitals[:max_results]
+def create_secondary_collection(db, merged_data):
+    db.donorStats.drop()
+    db.donorStats.insert_many(merged_data)
 
-# ----- Donor Matching Functions -----
-
-def match_donors_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5):
-    """
-    For a hospital with a shortage of donors for a given blood type, find donors (from other hospitals)
-    with that blood type sorted by distance from the shortage hospital.
+def update_secondary_data(db):
+    donor_stats = aggregate_donor_data_by_location(db)
+    inventory_stats = aggregate_inventory_by_location(db)
+    merged_data = merge_secondary_data(donor_stats, inventory_stats)
     
-    Returns a list of donor info dictionaries:
-      { "pid": <donor id>, "firstName": <first>, "lastName": <last>, "hospital": <hospital>, "city": <city>, "distance_km": <distance> }
-    """
-    # Get shortage hospital location.
-    sh_loc = db.locations.find_one({"name": shortage_hospital, "city": shortage_city})
-    if not sh_loc or "coordinates" not in sh_loc:
-        print("Shortage hospital location not found!")
-        return []
-    sh_lat = sh_loc["coordinates"]["lat"]
-    sh_lon = sh_loc["coordinates"]["lon"]
-
-    # Query donors with the specified blood type.
-    donors = list(db.persons.find({"role": "donor", "donorDetails.bloodType": blood_type}))
-    matched_donors = []
-    for donor in donors:
-        # Exclude donors from the shortage hospital (optional).
-        if donor.get("hospital") == shortage_hospital and donor.get("city") == shortage_city:
-            continue
-        donor_loc = db.locations.find_one({"name": donor.get("hospital"), "city": donor.get("city")})
-        if not donor_loc or "coordinates" not in donor_loc:
-            continue
-        distance = haversine_distance(sh_lat, sh_lon, donor_loc["coordinates"]["lat"], donor_loc["coordinates"]["lon"])
-        matched_donors.append({
-            "pid": donor.get("pid"),
-            "firstName": donor.get("firstName"),
-            "lastName": donor.get("lastName"),
-            "hospital": donor.get("hospital"),
-            "city": donor.get("city"),
-            "distance_km": round(distance, 2)
-        })
-    matched_donors.sort(key=lambda x: x["distance_km"])
-    return matched_donors[:max_results]
-
-def match_donors_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5):
-    """
-    For a hospital with a surplus (or simply for matching purposes), find donors (from other hospitals)
-    with the specified blood type sorted by distance from the surplus hospital.
+    # Complete missing blood types
+    complete_blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
+    hospitals = list(db.locations.find())
+    merged_dict = {(rec["hospital"], rec["city"]): rec for rec in merged_data}
     
-    Returns a list of donor info dictionaries:
-      { "pid": <donor id>, "firstName": <first>, "lastName": <last>, "hospital": <hospital>, "city": <city>, "distance_km": <distance> }
-    """
-    sp_loc = db.locations.find_one({"name": surplus_hospital, "city": surplus_city})
-    if not sp_loc or "coordinates" not in sp_loc:
-        print("Surplus hospital location not found!")
-        return []
-    sp_lat = sp_loc["coordinates"]["lat"]
-    sp_lon = sp_loc["coordinates"]["lon"]
+    # Preserve existing manual flag updates.
+    existing_flags = {}
+    for rec in db.donorStats.find():
+        key = (rec["hospital"], rec["city"])
+        flags = {}
+        for bt in rec.get("bloodTypeStats", []):
+            flags[bt["bloodType"]] = (bt.get("surplus", False), bt.get("shortage", False))
+        existing_flags[key] = flags
+    
+    for hosp in hospitals:
+        key = (hosp["name"], hosp["city"])
+        if key not in merged_dict:
+            merged_dict[key] = {"hospital": hosp["name"], "city": hosp["city"],
+                                "bloodTypeStats": [], "inventoryStats": []}
+        record = merged_dict[key]
+        # Complete donor stats.
+        new_bt_stats = []
+        for bt in complete_blood_types:
+            computed = next((item for item in record.get("bloodTypeStats", []) if item["bloodType"] == bt), None)
+            donorCount = computed["donorCount"] if computed else 0
+            flags = existing_flags.get(key, {}).get(bt, (False, False))
+            new_bt_stats.append({
+                "bloodType": bt,
+                "donorCount": donorCount,
+                "surplus": flags[0],
+                "shortage": flags[1]
+            })
+        record["bloodTypeStats"] = new_bt_stats
+        
+        # Complete inventory stats.
+        new_inv_stats = []
+        for bt in complete_blood_types:
+            computed_inv = next((item for item in record.get("inventoryStats", []) if item["bloodType"] == bt), None)
+            totalBloodCC = computed_inv["totalBloodCC"] if computed_inv else 0
+            new_inv_stats.append({
+                "bloodType": bt,
+                "totalBloodCC": totalBloodCC
+            })
+        record["inventoryStats"] = new_inv_stats
 
-    donors = list(db.persons.find({"role": "donor", "donorDetails.bloodType": blood_type}))
-    matched_donors = []
-    for donor in donors:
-        # Exclude donors from the surplus hospital.
-        if donor.get("hospital") == surplus_hospital and donor.get("city") == surplus_city:
-            continue
-        donor_loc = db.locations.find_one({"name": donor.get("hospital"), "city": donor.get("city")})
-        if not donor_loc or "coordinates" not in donor_loc:
-            continue
-        distance = haversine_distance(sp_lat, sp_lon, donor_loc["coordinates"]["lat"], donor_loc["coordinates"]["lon"])
-        matched_donors.append({
-            "pid": donor.get("pid"),
-            "firstName": donor.get("firstName"),
-            "lastName": donor.get("lastName"),
-            "hospital": donor.get("hospital"),
-            "city": donor.get("city"),
-            "distance_km": round(distance, 2)
-        })
-    matched_donors.sort(key=lambda x: x["distance_km"])
-    return matched_donors[:max_results]
+    completed_merged_data = list(merged_dict.values())
+    create_secondary_collection(db, completed_merged_data)
+    print("Secondary collection 'donorStats' updated with complete data.")
+
+#######################################
+# Donor and Inventory Management Functions (with authentication)
+#######################################
+
+def add_donor(db, donor_data):
+    donor_data["role"] = "donor"
+    result = db.persons.insert_one(donor_data)
+    print(f"Donor with pid {donor_data['pid']} added. Inserted ID: {result.inserted_id}")
+
+def remove_donor(db, pid):
+    result = db.persons.delete_one({"pid": pid, "role": "donor"})
+    if result.deleted_count > 0:
+        print(f"Donor with pid {pid} removed.")
+    else:
+        print(f"No donor with pid {pid} found.")
+
+def add_donor_and_update(db, donor_data):
+    add_donor(db, donor_data)
+    update_secondary_data(db)
+
+def remove_donor_and_update(db, pid):
+    remove_donor(db, pid)
+    update_secondary_data(db)
+
+def update_hospital_inventory(db, hospital, city, bloodType, delta_count, password):
+    # Verify password first.
+    hosp_doc = db.locations.find_one({"name": hospital, "city": city})
+    if not hosp_doc:
+        print("Hospital not found!")
+        return
+    if "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+        print("Authentication failed: Incorrect password.")
+        return
+
+    lid = hosp_doc["lid"]
+    if delta_count > 0:
+        for i in range(delta_count):
+            new_bbid = "NEW" + str(db.bloodBags.count_documents({}) + 1)
+            new_blood_bag = {
+                "bbid": new_bbid,
+                "donationType": "Whole Blood",
+                "quantityCC": 450,
+                "bloodType": bloodType,
+                "available": True
+            }
+            db.bloodBags.insert_one(new_blood_bag)
+            new_inventory = {
+                "bbid": new_bbid,
+                "lid": lid,
+                "available": True
+            }
+            db.globalInventory.insert_one(new_inventory)
+        print(f"Added {delta_count} blood bag(s) of type {bloodType} to {hospital} in {city}.")
+    elif delta_count < 0:
+        count_to_remove = -delta_count
+        pipeline = [
+            {"$lookup": {"from": "bloodBags", "localField": "bbid", "foreignField": "bbid", "as": "bag"}},
+            {"$unwind": "$bag"},
+            {"$match": {"lid": lid, "available": True, "bag.bloodType": bloodType}}
+        ]
+        available_bags = list(db.globalInventory.aggregate(pipeline))
+        if len(available_bags) < count_to_remove:
+            print(f"Not enough blood bags to remove. Available: {len(available_bags)}")
+        else:
+            for bag_record in available_bags[:count_to_remove]:
+                db.globalInventory.delete_one({"_id": bag_record["_id"]})
+                db.bloodBags.update_one({"bbid": bag_record["bag"]["bbid"]}, {"$set": {"available": False}})
+            print(f"Removed {count_to_remove} blood bag(s) of type {bloodType} from {hospital} in {city}.")
+    else:
+        print("No change requested (delta_count is 0).")
+    
+    update_secondary_data(db)
+    
+    pipeline_inventory = [
+        {"$lookup": {"from": "bloodBags", "localField": "bbid", "foreignField": "bbid", "as": "bag"}},
+        {"$unwind": "$bag"},
+        {"$lookup": {"from": "locations", "localField": "lid", "foreignField": "lid", "as": "loc"}},
+        {"$unwind": "$loc"},
+        {"$match": {"loc.name": hospital, "loc.city": city, "available": True}},
+        {"$group": {"_id": "$bag.bloodType", "totalBloodCC": {"$sum": "$bag.quantityCC"}}},
+        {"$project": {"_id": 0, "bloodType": "$_id", "totalBloodCC": 1}}
+    ]
+    current_inventory = list(db.globalInventory.aggregate(pipeline_inventory))
+    print("Current Inventory by Blood Type:")
+    for inv in current_inventory:
+        print(inv)
+
+def update_inventory_flag(db, hospital, city, blood_type, surplus=None, shortage=None, password=None):
+    # For updating flags, also require a password.
+    hosp_doc = db.locations.find_one({"name": hospital, "city": city})
+    if not hosp_doc:
+        print("Hospital not found!")
+        return
+    if password is None or "passwordHash" not in hosp_doc or not verify_password(password, hosp_doc["passwordHash"]):
+        print("Authentication failed: Incorrect password.")
+        return
+
+    update_doc = {}
+    if surplus is not None:
+        update_doc["bloodTypeStats.$[elem].surplus"] = surplus
+    if shortage is not None:
+        update_doc["bloodTypeStats.$[elem].shortage"] = shortage
+    if update_doc:
+        result = db.donorStats.update_one(
+            {"hospital": hospital, "city": city},
+            {"$set": update_doc},
+            array_filters=[{"elem.bloodType": blood_type}]
+        )
+        if result.modified_count > 0:
+            print(f"Updated flags for {hospital}, {city}, blood type {blood_type}.")
+        else:
+            print(f"No matching record found to update flags for {hospital}, {city}, blood type {blood_type}.")
+
+def add_hospital(db, hospital_data):
+    if "lid" not in hospital_data:
+        count = db.locations.count_documents({})
+        hospital_data["lid"] = "L{:04d}".format(count + 1)
+    if "locationCode" not in hospital_data:
+        hospital_data["locationCode"] = "HOSP"
+    if "password" in hospital_data:
+        hospital_data["passwordHash"] = hash_password(hospital_data.pop("password"))
+    result = db.locations.insert_one(hospital_data)
+    print(f"Hospital '{hospital_data['name']}' added with lid {hospital_data['lid']}.")
+    return hospital_data
+
+def search_secondary(db, hospital, city):
+    result = db.donorStats.find_one({"hospital": hospital, "city": city})
+    return result
+
+#######################################
+# Main Function for Hospital Management
+#######################################
 
 def main():
-    from pymongo import MongoClient
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
 
-    blood_type = "A+"
+    # Update secondary collection based on existing primary data.
+    update_secondary_data(db)
     
-    print("----- Matching surplus hospitals for a shortage -----")
-    shortage_hospital = "General Hospital 1"
-    shortage_city = "Los Angeles, CA"
-    surplus_matches = match_surplus_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5)
-    print("Shortage Hospital:", {"hospital": shortage_hospital, "city": shortage_city})
-    for m in surplus_matches:
-        print(m)
+    # Print all hospitals for reference.
+    print("Hospitals in the database:")
+    for hosp in db.locations.find():
+        print(f"{hosp['name']} - {hosp['city']}")
     
-    print("\n----- Matching shortage hospitals for a surplus -----")
-    surplus_hospital = "Central Medical Center"
-    surplus_city = "Boston, MA"
-    shortage_matches = match_shortage_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5)
-    print("Surplus Hospital:", {"hospital": surplus_hospital, "city": surplus_city})
-    for m in shortage_matches:
-        print(m)
+    # Example: Add a new hospital with a password.
+    hospital_data = {
+        "name": "Central Medical Center",
+        "city": "Boston, MA",
+        "coordinates": {"lat": 42.3601, "lon": -71.0589},
+        "password": "pass123"
+    }
+    new_hosp = add_hospital(db, hospital_data)
+    hosp_name = new_hosp["name"]
+    hosp_city = new_hosp["city"]
     
-    print("\n----- Matching donors for a shortage -----")
-    donor_matches_shortage = match_donors_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5)
-    for d in donor_matches_shortage:
-        print(d)
+    # For each blood type, add 5 blood bags and set surplus flag to True.
+    blood_types = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"]
+    for bt in blood_types:
+        # Use the hospital's password ("pass123" in this example) for authentication.
+        update_hospital_inventory(db, hosp_name, hosp_city, bt, 5, password="pass123")
+        update_inventory_flag(db, hosp_name, hosp_city, bt, surplus=True, shortage=False, password="pass123")
     
-    print("\n----- Matching donors for a surplus -----")
-    donor_matches_surplus = match_donors_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5)
-    for d in donor_matches_surplus:
-        print(d)
-
+    update_secondary_data(db)
+    
+    # Example: Add a donor.
+    donor = {
+        "pid": "P3333333",
+        "firstName": "Derek",
+        "lastName": "Miller",
+        "age": 32,
+        "hospital": "Central Medical Center",
+        "city": "Boston, MA",
+        "donorDetails": {
+            "bloodType": "B+",
+            "weightLBS": 175,
+            "heightIN": 72,
+            "gender": "M",
+            "nextSafeDonation": datetime(2025, 8, 15)
+        }
+    }
+    add_donor_and_update(db, donor)
+    
+    # Example: Remove a donor.
+    #remove_donor_and_update(db, "P1111111")
+    
+    # Example: Update hospital inventory (requires password).
+    update_hospital_inventory(db, hosp_name, hosp_city, "O+", 2, password="pass123")
+    
+    # Example: Search for the hospital in the secondary collection.
+    result = search_secondary(db, hosp_name, hosp_city)
+    print(f"\nSearch result for {hosp_name} in {hosp_city}:")
+    print(result)
+    
 if __name__ == "__main__":
     main()
