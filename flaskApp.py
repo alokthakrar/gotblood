@@ -10,7 +10,7 @@ from hospital_matching import (
     match_donors_for_surplus
 )
 
-from hospital_data import get_complete_hospital_data
+from hospital_data import get_complete_hospital_data, get_complete_hospital_data_with_location
 
 app = Flask(__name__)
 CORS(app)
@@ -127,6 +127,14 @@ def hospital_data_endpoint():
      Returns aggregated hospital data as JSON.
      """
      data = get_complete_hospital_data(db)
+     return Response(dumps(data), mimetype="application/json"), 200
+
+@app.route("/hospital/dataLoc", methods=["GET"])
+def hospital_data_endpoint():
+     """
+     Returns aggregated hospital data as JSON.
+     """
+     data = get_complete_hospital_data_with_location(db)
      return Response(dumps(data), mimetype="application/json"), 200
 
 @app.route("/test", methods=["GET"])
