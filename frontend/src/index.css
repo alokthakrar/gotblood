@@ -1,19 +1,19 @@
 /* Map container styling */
+/* Map container - Preserve Layout */
 .map-container {
   display: flex;
   height: 100vh;
 }
 
-/* Sidebar styling */
+/* Sidebar styling - Keeping your red theme */
 .sidebar {
   width: 250px;
   padding: 15px;
   background: #932d2d; /* Red background */
   color: white;
-  /*height: 100vh;*/
   height: 100vh;
   position: fixed;
-  top: 100px;
+  top: 0px;
   left: 0;
   border-right: 2px solid #ddd;
   transition: all 0.3s ease;
@@ -23,6 +23,7 @@
   margin-bottom: 10px;
   font-size: 1.5rem;
 }
+
 .sidebar p {
   margin-bottom: 10px;
 }
@@ -54,7 +55,7 @@
   background-color: #ff6666; /* Lighter red on hover */
 }
 
-/* Add a link to close the sidebar */
+/* Close button */
 .sidebar-close {
   color: white;
   position: absolute;
@@ -64,11 +65,62 @@
   cursor: pointer;
 }
 
-/*.sidebar select {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-}*/
+/* Legend Styling */
+.legend h4, .map-tips h4 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.legend ul {
+  list-style: none;
+  padding: 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.hospital-icon {
+  width: 22px;
+  height: 22px;
+  filter: brightness(1.1);
+}
+
+.severity-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+
+/* Severity Colors */
+.high { background-color: red; }
+.medium { background-color: orange; }
+.low { background-color: yellow; }
+.none { background-color: green; }
+
+/* Map Tips Section */
+.map-tips {
+  margin-top: 20px;
+}
+
+.map-tips ul {
+  list-style: none;
+  padding: 0;
+}
+
+.map-tips li {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
 
 /* Ensure the map takes up remaining space */
 .map-wrapper {
@@ -76,6 +128,7 @@
   height: 100%;
 }
 
+/* Navbar - Keeping white and red */
 .navbar {
   background-color: white; /* White background for navbar */
   padding: 50px;
@@ -97,5 +150,3 @@
   background: white; /* White background for main content */
   min-height: 100vh;
 }
-
-
