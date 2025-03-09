@@ -13,7 +13,7 @@
   color: white;
   height: 100vh;
   position: fixed;
-  top: 0px;
+  top: 60px;
   left: 0;
   border-right: 2px solid #ddd;
   transition: all 0.3s ease;
@@ -128,21 +128,58 @@
   height: 100%;
 }
 
-/* Navbar - Keeping white and red */
+/* Navbar - Lighter red & centered link */
 .navbar {
-  background-color: white; /* White background for navbar */
-  padding: 50px;
-  color: red;
+  background: #932d2d; /* Lighter red */
+  padding: 15px 0;
+  display: flex;
+  justify-content: flex-end; 
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+.nav-links {
+  display: flex;
+  gap: 20px; /* Space between links */
 }
 
 .navbar a {
-  color: red;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
   text-decoration: none;
+  padding: 8px 100px;
+  padding-left: 100px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
 .navbar a:hover {
-  color: #ff4d4d; /* Hover effect with a lighter red */
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  transform: scale(1.05);
 }
+
+/* Center "Hospitals" Link */
+.center-link {
+  font-size: 22px;
+  text-transform: uppercase;
+}
+
+/* Navbar - Keeping white and red */
+
+
+/*.navbar a {
+  color: red;
+  text-decoration: none;
+}*/
+
+/*.navbar a:hover {
+  color: #ff4d4d; 
+}*/
 
 .main-content {
   margin-left: 250px; /* Space for the sidebar */
@@ -150,3 +187,9 @@
   background: white; /* White background for main content */
   min-height: 100vh;
 }
+
+body, .home-container {
+  margin: 0;
+  padding-top: 60px; /* Adjust this if navbar height changes */
+}
+
