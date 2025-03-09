@@ -7,6 +7,8 @@ import Home from './pages/Home';
 import SignUp from './pages/SignUp'
 import FilterableHospitalTable from './pages/query/Query';
 import NavTop from './components/Bav';
+import SignIn from './pages/HospitalSignIn/HospitalSignIn';
+import Hsignup from './pages/HospitalSignup/HospitalSignup';
 //import About from './pages/About';
 
 const App = () => {
@@ -16,8 +18,10 @@ const App = () => {
     <Router>
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/signup" element={<SignUp/>}/>
+      <Route path="/hsign" element={<Hsignup/>}/>
+      <Route path="/dsign" element={<SignUp/>}/>
       <Route path="/filter" element={<FilterableHospitalTable/>}/>
+      <Route path="/hlogin" element={<SignIn/>}/>
     </Routes>
   </Router>
   </>

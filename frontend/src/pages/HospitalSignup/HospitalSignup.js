@@ -5,7 +5,7 @@ import axios from "axios";
 const GEOCODING_API_KEY = "041a9e867a23424d9eb6586661af3d59"; // Replace with your API key
 const GEOCODING_API_URL = "https://api.opencagedata.com/geocode/v1/json";
 
-const Signup = () => {
+const Hsignup = () => {
   const [formData, setFormData] = useState({
     email: "",
     zipCode: "", 
@@ -99,5 +99,5 @@ const Signup = () => {
   );
 };
 
-export default Signup;
+export default Hsignup;
 
