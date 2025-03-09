@@ -7,12 +7,9 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^13.5.0",
-<<<<<<< HEAD
     "antd": "^5.24.3",
-=======
     "axios": "^1.8.2",
     "bootstrap": "^5.3.3",
->>>>>>> 35efc4bc914240b5554deda11c5b7693d974c2ed
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "react": "^19.0.0",

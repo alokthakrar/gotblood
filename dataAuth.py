@@ -1,22 +1,8 @@
 # sampleData.py
 from pymongo import MongoClient
 from datetime import datetime
-import random
-from managementAuth import (
-    update_secondary_data,
-    update_inventory_flag,
-    add_hospital,
-    update_hospital_inventory,
-    add_donor,
-    add_donor_and_update,
-    remove_donor,
-    remove_donor_and_update
-)
-
-def wipe_database(db_name="americanRedCrossDB"):
-    client = MongoClient("mongodb://localhost:27017")
-    client.drop_database(db_name)
-    print(f"Database '{db_name}' has been wiped.")
+client = MongoClient("mongodb://localhost:27017")
+db = client["americanRedCrossDB"]
 
 def generate_sample_hospitals(db):
     """
@@ -33,7 +19,7 @@ def generate_sample_hospitals(db):
     db.locations.drop()
     for i, hosp in enumerate(hospitals, start=1):
         hosp["lid"] = "L{:04d}".format(i)
-        from managementAuth import register_auth0_user
+        from managmentAuth import register_auth0_user
         register_auth0_user(hosp["name"], hosp["password"])
     db.locations.insert_many(hospitals)
     print(f"Inserted {len(hospitals)} sample hospitals.")
@@ -177,7 +163,7 @@ def generate_sample_inventory(db):
     print("Inserted sample blood bags and global inventory for every blood type at each hospital.")
 
 def set_manual_flags(db):
-    from managementAuth import update_inventory_flag
+    from managmentAuth import update_inventory_flag
     update_inventory_flag(db, "General Hospital 1", "Los Angeles, CA", "A+", surplus=False, shortage=True, password="securePass")
     update_inventory_flag(db, "Central Medical Center", "Boston, MA", "A+", surplus=True, shortage=False, password="pass123")
     update_inventory_flag(db, "City Hospital 1", "New York, NY", "A+", surplus=True, shortage=False, password="hospitalNY")
@@ -185,7 +171,7 @@ def set_manual_flags(db):
     print("Manually set surplus/shortage flags for testing matching.")
 
 def generate_all_sample_data():
-    from managementAuth import update_secondary_data, update_hospital_inventory
+    from managmentAuth import update_secondary_data, update_hospital_inventory
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
     wipe_database("americanRedCrossDB")

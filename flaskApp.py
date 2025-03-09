@@ -1,19 +1,18 @@
 from flask import Flask, request, Response
+from flask_cors import CORS
 from pymongo import MongoClient
 from bson.json_util import dumps
 from hospital_data import get_complete_hospital_data
 from hospital_matching import match_hospital_with_shortage_to_surplus
 from mailchimp_marketing import Client
 from mailchimp_marketing.api_client import ApiClientError
-from flask.ext.elasticsearch import FlaskElasticsearch
+
 
 app = Flask(__name__)
-
+CORS(app)
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
 db = client["americanRedCrossDB"]
-es = FlaskElasticsearch("http://localhost:9200")
-es.init_app(app)
 
 
 # Mailchimp Configuration
