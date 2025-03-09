@@ -1,9 +1,10 @@
+# hospital_matching.py
 from pymongo import MongoClient
 import math
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
-    Computes the Haversine distance between two latitude/longitude points in kilometers.
+    Computes the Haversine distance (in kilometers) between two latitude/longitude points.
     """
     R = 6371  # Earth's radius in kilometers
     dlat = math.radians(lat2 - lat1)
@@ -12,92 +13,185 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-def match_hospital_with_shortage_to_surplus(db, shortage_hospital_name, shortage_city, blood_type, max_results=5):
+# ----- Hospital Matching Functions -----
+
+def match_surplus_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5):
     """
-    For a hospital with a shortage of a specific blood type, this function:
-    
-    1. Retrieves the shortage hospital's aggregated record from the secondary collection (donorStats)
-       and verifies that it has a shortage flag set to True for the given blood type.
-    2. Retrieves the shortage hospital's location data to obtain its coordinates.
-    3. Searches the secondary collection for hospitals (other than the shortage hospital)
-       that have the given blood type flagged with surplus=True.
-    4. Calculates the distance (using haversine_distance) between the shortage hospital and each candidate.
-    5. Returns the top 5 closest matching hospitals.
-    
-    Returns a list of dictionaries in the format:
-      { "hospital": <name>, "city": <city>, "distance_km": <distance>, "donorCount": <donorCount> }
+    For a hospital with a shortage of a given blood type, finds up to max_results hospitals
+    (other than the shortage hospital) that have a surplus for that blood type.
+    Returns a list of dictionaries:
+      { "hospital": <name>, "city": <city>, "distance_km": <distance> }
     """
-    # Retrieve the shortage hospital's aggregated record.
-    shortage_record = db.donorStats.find_one({"hospital": shortage_hospital_name, "city": shortage_city})
-    if not shortage_record:
-        print("Shortage hospital record not found in secondary collection!")
+    # Get shortage hospital location.
+    sh_loc = db.locations.find_one({"name": shortage_hospital, "city": shortage_city})
+    if not sh_loc or "coordinates" not in sh_loc:
+        print("Shortage hospital location not found!")
         return []
-    
-    # Verify the shortage flag is True for the specified blood type.
-    shortage_flag = False
-    for bt_stat in shortage_record.get("bloodTypeStats", []):
-        if bt_stat["bloodType"] == blood_type and bt_stat.get("shortage") == True:
-            shortage_flag = True
-            break
-    if not shortage_flag:
-        print(f"Hospital {shortage_hospital_name} in {shortage_city} does not have a shortage for {blood_type}.")
-        return []
-    
-    # Retrieve shortage hospital's coordinates.
-    shortage_hosp = db.locations.find_one({"name": shortage_hospital_name, "city": shortage_city})
-    if not shortage_hosp or "coordinates" not in shortage_hosp:
-        print("Shortage hospital not found or missing coordinates in locations!")
-        return []
-    sh_coords = shortage_hosp["coordinates"]
-    
-    # Query the secondary collection for hospitals with surplus for the specified blood type.
-    potential_matches = list(db.donorStats.find({
+    sh_lat = sh_loc["coordinates"]["lat"]
+    sh_lon = sh_loc["coordinates"]["lon"]
+
+    surplus_records = list(db.donorStats.find({
         "bloodTypeStats": {"$elemMatch": {"bloodType": blood_type, "surplus": True}}
     }))
-    
+
     matching_hospitals = []
-    for record in potential_matches:
-        # Exclude the shortage hospital itself.
-        if record["hospital"] == shortage_hospital_name and record["city"] == shortage_city:
+    for record in surplus_records:
+        if record["hospital"] == shortage_hospital and record["city"] == shortage_city:
+            continue  # skip the same hospital
+        sp_loc = db.locations.find_one({"name": record["hospital"], "city": record["city"]})
+        if not sp_loc or "coordinates" not in sp_loc:
             continue
-        # Retrieve candidate hospital's location.
-        hosp_doc = db.locations.find_one({"name": record["hospital"], "city": record["city"]})
-        if not hosp_doc or "coordinates" not in hosp_doc:
-            continue
-        hosp_coords = hosp_doc["coordinates"]
-        distance = haversine_distance(sh_coords["lat"], sh_coords["lon"],
-                                      hosp_coords["lat"], hosp_coords["lon"])
-        # Retrieve donor count for the specified blood type.
-        donor_count = 0
-        for bt_stat in record.get("bloodTypeStats", []):
-            if bt_stat["bloodType"] == blood_type:
-                donor_count = bt_stat.get("donorCount", 0)
-                break
+        distance = haversine_distance(sh_lat, sh_lon, sp_loc["coordinates"]["lat"], sp_loc["coordinates"]["lon"])
         matching_hospitals.append({
             "hospital": record["hospital"],
             "city": record["city"],
-            "distance_km": distance,
-            "donorCount": donor_count
+            "distance_km": round(distance, 2)
         })
-    
-    # Sort candidates by distance and return the top 5.
-    matching_hospitals = sorted(matching_hospitals, key=lambda x: x["distance_km"])
+    matching_hospitals.sort(key=lambda x: x["distance_km"])
     return matching_hospitals[:max_results]
 
+def match_shortage_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5):
+    """
+    For a hospital with a surplus of a given blood type, finds up to max_results hospitals
+    (other than the surplus hospital) that have a shortage for that blood type.
+    Returns a list of dictionaries:
+      { "hospital": <name>, "city": <city>, "distance_km": <distance> }
+    """
+    sp_loc = db.locations.find_one({"name": surplus_hospital, "city": surplus_city})
+    if not sp_loc or "coordinates" not in sp_loc:
+        print("Surplus hospital location not found!")
+        return []
+    sp_lat = sp_loc["coordinates"]["lat"]
+    sp_lon = sp_loc["coordinates"]["lon"]
+
+    shortage_records = list(db.donorStats.find({
+        "bloodTypeStats": {"$elemMatch": {"bloodType": blood_type, "shortage": True}}
+    }))
+
+    matching_hospitals = []
+    for record in shortage_records:
+        if record["hospital"] == surplus_hospital and record["city"] == surplus_city:
+            continue  # skip same hospital
+        sh_loc = db.locations.find_one({"name": record["hospital"], "city": record["city"]})
+        if not sh_loc or "coordinates" not in sh_loc:
+            continue
+        distance = haversine_distance(sp_lat, sp_lon, sh_loc["coordinates"]["lat"], sh_loc["coordinates"]["lon"])
+        matching_hospitals.append({
+            "hospital": record["hospital"],
+            "city": record["city"],
+            "distance_km": round(distance, 2)
+        })
+    matching_hospitals.sort(key=lambda x: x["distance_km"])
+    return matching_hospitals[:max_results]
+
+# ----- Donor Matching Functions -----
+
+def match_donors_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5):
+    """
+    For a hospital with a shortage of donors for a given blood type, find donors (from other hospitals)
+    with that blood type sorted by distance from the shortage hospital.
+    
+    Returns a list of donor info dictionaries:
+      { "pid": <donor id>, "firstName": <first>, "lastName": <last>, "hospital": <hospital>, "city": <city>, "distance_km": <distance> }
+    """
+    # Get shortage hospital location.
+    sh_loc = db.locations.find_one({"name": shortage_hospital, "city": shortage_city})
+    if not sh_loc or "coordinates" not in sh_loc:
+        print("Shortage hospital location not found!")
+        return []
+    sh_lat = sh_loc["coordinates"]["lat"]
+    sh_lon = sh_loc["coordinates"]["lon"]
+
+    # Query donors with the specified blood type.
+    donors = list(db.persons.find({"role": "donor", "donorDetails.bloodType": blood_type}))
+    matched_donors = []
+    for donor in donors:
+        # Exclude donors from the shortage hospital (optional).
+        if donor.get("hospital") == shortage_hospital and donor.get("city") == shortage_city:
+            continue
+        donor_loc = db.locations.find_one({"name": donor.get("hospital"), "city": donor.get("city")})
+        if not donor_loc or "coordinates" not in donor_loc:
+            continue
+        distance = haversine_distance(sh_lat, sh_lon, donor_loc["coordinates"]["lat"], donor_loc["coordinates"]["lon"])
+        matched_donors.append({
+            "pid": donor.get("pid"),
+            "firstName": donor.get("firstName"),
+            "lastName": donor.get("lastName"),
+            "hospital": donor.get("hospital"),
+            "city": donor.get("city"),
+            "distance_km": round(distance, 2)
+        })
+    matched_donors.sort(key=lambda x: x["distance_km"])
+    return matched_donors[:max_results]
+
+def match_donors_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5):
+    """
+    For a hospital with a surplus (or simply for matching purposes), find donors (from other hospitals)
+    with the specified blood type sorted by distance from the surplus hospital.
+    
+    Returns a list of donor info dictionaries:
+      { "pid": <donor id>, "firstName": <first>, "lastName": <last>, "hospital": <hospital>, "city": <city>, "distance_km": <distance> }
+    """
+    sp_loc = db.locations.find_one({"name": surplus_hospital, "city": surplus_city})
+    if not sp_loc or "coordinates" not in sp_loc:
+        print("Surplus hospital location not found!")
+        return []
+    sp_lat = sp_loc["coordinates"]["lat"]
+    sp_lon = sp_loc["coordinates"]["lon"]
+
+    donors = list(db.persons.find({"role": "donor", "donorDetails.bloodType": blood_type}))
+    matched_donors = []
+    for donor in donors:
+        # Exclude donors from the surplus hospital.
+        if donor.get("hospital") == surplus_hospital and donor.get("city") == surplus_city:
+            continue
+        donor_loc = db.locations.find_one({"name": donor.get("hospital"), "city": donor.get("city")})
+        if not donor_loc or "coordinates" not in donor_loc:
+            continue
+        distance = haversine_distance(sp_lat, sp_lon, donor_loc["coordinates"]["lat"], donor_loc["coordinates"]["lon"])
+        matched_donors.append({
+            "pid": donor.get("pid"),
+            "firstName": donor.get("firstName"),
+            "lastName": donor.get("lastName"),
+            "hospital": donor.get("hospital"),
+            "city": donor.get("city"),
+            "distance_km": round(distance, 2)
+        })
+    matched_donors.sort(key=lambda x: x["distance_km"])
+    return matched_donors[:max_results]
+
 def main():
+    from pymongo import MongoClient
     client = MongoClient("mongodb://localhost:27017")
     db = client["americanRedCrossDB"]
-    
-    # Example usage:
-    shortage_hospital_name = "General Hospital 1"
-    shortage_city = "Los Angeles, CA"
+
     blood_type = "A+"
     
-    #return top 5 closest matchest with their data in an endpoint
-    matches = match_hospital_with_shortage_to_surplus(db, shortage_hospital_name, shortage_city, blood_type, max_results=5)
-    print(f"Top matching hospitals for {shortage_hospital_name} in {shortage_city} needing {blood_type}:")
-    for match in matches:
-        print(match)
+    print("----- Matching surplus hospitals for a shortage -----")
+    shortage_hospital = "General Hospital 1"
+    shortage_city = "Los Angeles, CA"
+    surplus_matches = match_surplus_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5)
+    print("Shortage Hospital:", {"hospital": shortage_hospital, "city": shortage_city})
+    for m in surplus_matches:
+        print(m)
+    
+    print("\n----- Matching shortage hospitals for a surplus -----")
+    surplus_hospital = "Central Medical Center"
+    surplus_city = "Boston, MA"
+    shortage_matches = match_shortage_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5)
+    print("Surplus Hospital:", {"hospital": surplus_hospital, "city": surplus_city})
+    for m in shortage_matches:
+        print(m)
+    
+    print("\n----- Matching donors for a shortage -----")
+    donor_matches_shortage = match_donors_for_shortage(db, shortage_hospital, shortage_city, blood_type, max_results=5)
+    for d in donor_matches_shortage:
+        print(d)
+    
+    print("\n----- Matching donors for a surplus -----")
+    donor_matches_surplus = match_donors_for_surplus(db, surplus_hospital, surplus_city, blood_type, max_results=5)
+    for d in donor_matches_surplus:
+        print(d)
 
 if __name__ == "__main__":
     main()
