@@ -58,20 +58,20 @@ const FitMapBounds = ({ locations }) => {
 const HospitalMap = () => {
     const [data, setData] = useState([]);
     const [mapHospitals, setMapHospitals] = useState([]); // State for map-ready hospital data
-    const [surplusMatches, setSurplusMatches] = useState([]); // State for surplus matches
+    const [largestShortageHospitalMatch, setLargestShortageHospitalMatch] = useState(null); // State for largest shortage match
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [matchError, setMatchError] = useState(null);
 
-    // **Define Shortage Hospital Details Here** - Make Dynamic Later if Needed
-    const shortageHospitalName = "General Hospital 1"; // Example shortage hospital
-    const shortageCityState = "Los Angeles, CA"; // Example shortage city/state
-    const bloodTypeForMatching = "O+"; // Example blood type for matching
-    const maxMatchingResults = 5; // Example max ¿
-    
-  useEffect(() => {
+    // **Define Node of Interest (Surplus Hospital in API context) **
+    const nodeOfInterestName = "Central Medical Center"; // Node of interest is now Central Medical Center
+    const nodeOfInterestCityState = "Boston, MA";
+    const bloodTypeForMatching = "A+";
+    const maxMatchingResults = 5;
+
+    useEffect(() => {
         const fetchDataAsync = async () => { // Wrap fetchData in an async function
             try {
-                const response = await fetch('http://localhost:5001/hospital/dataLoc');
+                const response = await fetch('http://localhost:5001/hospital/data/loc');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -111,35 +111,43 @@ const HospitalMap = () => {
             }
         };
 
-        const fetchSurplusData = async () => {
+        const fetchLargestShortageMatch = async () => {
             setLoadingMatches(true);
             setMatchError(null);
+            setLargestShortageHospitalMatch(null); // Clear previous match
+
             try {
-                // Build URL for surplus matching
-                /*
-                const shortageHospitalEncoded = encodeURIComponent(shortageHospitalName);
-                const shortageCityEncoded = encodeURIComponent(shortageCityState);
+                // Build URL for shortage matching (using 'shortage' endpoint as before)
+                const surplusHospitalEncoded = encodeURIComponent(nodeOfInterestName); // Node of interest as surplus hospital
+                const surplusCityEncoded = encodeURIComponent(nodeOfInterestCityState);
                 const bloodTypeEncoded = encodeURIComponent(bloodTypeForMatching);
-                const url = `http://localhost:5001/hospital/matching/surplus?shortage_hospital=${shortageHospitalEncoded}&shortage_city=${shortageCityEncoded}&blood_type=${bloodTypeEncoded}&max_results=${maxMatchingResults}`;
-                */
-                const surplusHospitalEncoded = encodeURIComponent("Central Medical Center"); // Match curl value
-                const surplusCityEncoded = encodeURIComponent("Boston, MA"); // Match curl value
-                const bloodTypeEncoded = encodeURIComponent("A+");
-                const maxResults = 5;
-                
-                // Use /hospital/matching/shortage endpoint (match curl)
+                const maxResults = maxMatchingResults;
+
                 const url = `http://localhost:5001/hospital/matching/shortage?surplus_hospital=${surplusHospitalEncoded}&surplus_city=${surplusCityEncoded}&blood_type=${bloodTypeEncoded}&max_results=${maxResults}`;
                 const matchResponse = await fetch(url);
                 if (!matchResponse.ok) {
                     throw new Error(`Matching API Error: ${matchResponse.status}`);
                 }
                 const matchData = await matchResponse.json();
-                setSurplusMatches(matchData);
-                console.log("Surplus Matches Fetched:", matchData);
+
+                if (matchData && matchData.length > 0) {
+                    // Find hospital with the largest shortage (smallest totalBloodCC)
+                    const largestShortageMatch = matchData.reduce((minShortageHospital, currentHospital) => {
+                        return (currentHospital.totalBloodCC < minShortageHospital.totalBloodCC) ? currentHospital : minShortageHospital;
+                    }, matchData[0]); // Assume first hospital is initial min
+
+                    setLargestShortageHospitalMatch(largestShortageMatch);
+                    console.log("Largest Shortage Hospital Match:", largestShortageMatch);
+                } else {
+                    setLargestShortageHospitalMatch(null); // No matches found
+                    console.log("No shortage matches found for node of interest.");
+                }
+
+
             } catch (err) {
                 setMatchError(err.message);
-                console.error("Error fetching surplus matches:", err);
-                setSurplusMatches([]); // Clear matches on error
+                console.error("Error fetching shortage matches:", err);
+                setLargestShortageHospitalMatch(null); // Clear match on error
             } finally {
                 setLoadingMatches(false);
             }
@@ -147,21 +155,25 @@ const HospitalMap = () => {
 
 
         fetchDataAsync();
-        fetchSurplusData(); // Fetch surplus matches when component mounts
+        fetchLargestShortageMatch(); // Fetch largest shortage match when component mounts
 
     }, []);
 
 
-    // Find coordinates of the shortage hospital
-    const shortageHospitalInfo = mapHospitals.find(h => h.name === shortageHospitalName && h.cityState === shortageCityState);
-    const shortageHospitalCoords = shortageHospitalInfo ? shortageHospitalInfo.coords : null;
+    // Find coordinates of the node of interest (Central Medical Center)
+    const nodeOfInterestInfo = mapHospitals.find(h => h.name === nodeOfInterestName && h.cityState === nodeOfInterestCityState);
+    const nodeOfInterestCoords = nodeOfInterestInfo ? nodeOfInterestInfo.coords : null;
+
+    console.log("Node of Interest:", nodeOfInterestName, nodeOfInterestCityState); // DEBUG LOG
+    console.log("Node of Interest Coords:", nodeOfInterestCoords); // DEBUG LOG
+    console.log("Largest Shortage Match:", largestShortageHospitalMatch); // DEBUG LOG
 
 
     return (
         <div className="map-wrapper">
             <h2>Hospital Blood Supply Map</h2>
             {matchError && <p style={{ color: 'red' }}>Error fetching matches: {matchError}</p>}
-            {loadingMatches && <p>Loading surplus hospital matches...</p>}
+            {loadingMatches && <p>Loading shortage matches...</p>}
 
             <MapContainer
                 center={[37.0902, -95.7129]}
@@ -211,27 +223,27 @@ const HospitalMap = () => {
                     }
                 })}
 
-                {/* **Render Arrows for Surplus Matches** */}
-                {surplusMatches.map((match, matchIndex) => {
-                    const matchedHospitalCoords = match.coordinates; // Coordinates of surplus hospital
-                    if (shortageHospitalCoords && matchedHospitalCoords && shortageHospitalCoords[0] !== 0 && shortageHospitalCoords[1] !== 0 && matchedHospitalCoords.lat !== 0 && matchedHospitalCoords.lon !== 0) {
-                        const arrowPoints = [shortageHospitalCoords, [matchedHospitalCoords.lat, matchedHospitalCoords.lon]]; // From shortage to surplus
-                        return (
-                            <Polyline
-                                key={`surplus-match-${matchIndex}`}
-                                positions={arrowPoints}
-                                color="green" // Surplus arrows in green
-                                weight={3}
-                                opacity={0.8}
-                            >
-                                <Popup>
-                                    {`Potential Blood Supply from ${match.hospital} to ${shortageHospitalName} (Blood Type ${bloodTypeForMatching}) - Distance: ${match.distance_km} km`}
-                                </Popup>
-                            </Polyline>
-                        );
-                    }
-                    return null; // Don't render arrow if coordinates are missing
-                })}
+                {/* **Render Arrow to Hospital with Largest Shortage** */}
+                {(() => { // Immediately invoked function expression for logging just before Polyline
+                    console.log("Rendering Polyline Condition:");
+                    console.log("largestShortageHospitalMatch:", largestShortageHospitalMatch);
+                    console.log("nodeOfInterestCoords:", nodeOfInterestCoords);
+                    console.log("largestShortageHospitalMatch Coordinates:", largestShortageHospitalMatch?.coordinates);
+                    const shouldRenderPolyline = largestShortageHospitalMatch && nodeOfInterestCoords && largestShortageHospitalMatch.coordinates && nodeOfInterestCoords[0] !== 0 && nodeOfInterestCoords[1] !== 0 && largestShortageHospitalMatch.coordinates.lat !== 0 && largestShortageHospitalMatch.coordinates.lon !== 0;
+                    console.log("Should Render Polyline:", shouldRenderPolyline);
+                    return shouldRenderPolyline ? (
+                        <Polyline
+                            positions={[nodeOfInterestCoords, [largestShortageHospitalMatch.coordinates.lat, largestShortageHospitalMatch.coordinates.lon]]}
+                            color="red" // Arrow to largest shortage in red
+                            weight={4}
+                            opacity={0.9}
+                        >
+                            <Popup>
+                                {`Largest Shortage Hospital: ${largestShortageHospitalMatch.hospital} (Blood Type ${bloodTypeForMatching}) - Shortage Level: ${largestShortageHospitalMatch.totalBloodCC} cc`}
+                            </Popup>
+                        </Polyline>
+                    ) : null;
+                })()}
 
 
                 {/* Fit map to markers using mapHospitals coords */}

@@ -1,5 +1,6 @@
 # flaskApp.py
 from flask import Flask, request, Response
+from flask_cors import CORS
 from pymongo import MongoClient
 from bson.json_util import dumps
 from hospital_matching import (
@@ -9,7 +10,7 @@ from hospital_matching import (
     match_donors_for_surplus
 )
 from hospital_data import get_complete_hospital_data, get_complete_hospital_data_with_location
-from managementAuth import (
+from managmentAuth import (
     add_hospital,
     add_donor_and_update,
     remove_donor_and_update,
@@ -19,6 +20,7 @@ from managementAuth import (
 )
 
 app = Flask(__name__)
+CORS(app)
 
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
