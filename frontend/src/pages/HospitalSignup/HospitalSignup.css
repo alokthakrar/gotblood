@@ -1,95 +1,53 @@
-body {
-  background-color: #f4f4f9;
-  font-family: 'Roboto', sans-serif;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-}
+/* Hsignup.css */
 
-.form-container {
-  width: 100%;
-  max-width: 400px;
+.hsignup-form-container {
+  max-width: 400px; /* Increased max-width for wider widget */
+  margin: 50px auto 0; /* Added top margin (50px), auto horizontal margins, 0 bottom margin */
   padding: 20px;
-  background: #ffffff;
+  background-color: #f4f4f4;
   border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+h2 {
   text-align: center;
-  border: 1px solid #ddd;
 }
 
-.form-container h2 {
-  font-size: 24px;
-  color: #d9534f;
-  margin-bottom: 20px;
+.form-group {
+  margin-bottom: 15px;
 }
 
-.form-container input {
+.form-group label {
+  display: block;
+  font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+button {
   width: 100%;
   padding: 10px;
-  font-size: 16px;
-  margin-bottom: 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  box-sizing: border-box;
-  transition: border-color 0.3s ease;
-}
-
-.form-container input:focus {
-  border-color: #d9534f;
-  outline: none;
-}
-
-.form-container button {
-  width: 100%;
-  padding: 10px 15px;
-  font-size: 18px;
-  background-color: #d9534f;
-  color: #ffffff;
+  background-color: #4CAF50;
+  color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
+  font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.form-container button:hover {
-  background-color: #b52b2b;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-}
-
-.form-container button:disabled {
+button:disabled {
   background-color: #ddd;
   cursor: not-allowed;
 }
 
-.form-container p {
-  font-size: 14px;
-  color: #333;
-  margin-top: 10px;
-}
-
-.form-container p.error {
-  color: #a94442;
-}
-
-.form-container p.success {
-  color: #3c763d;
-}
-
-@media (max-width: 768px) {
-  .form-container {
-    padding: 15px;
-    margin: 10px;
-  }
-
-  .form-container h2 {
-    font-size: 20px;
-  }
-
-  .form-container button {
-    font-size: 16px;
-    padding: 8px;
-  }
+.error-message {
+  color: red;
+  font-weight: bold;
+  text-align: center;
 }
