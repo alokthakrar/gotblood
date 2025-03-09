@@ -4,20 +4,16 @@ from pymongo import MongoClient
 from bson.json_util import dumps
 from hospital_data import get_complete_hospital_data
 from hospital_matching import match_hospital_with_shortage_to_surplus
-<<<<<<< HEAD
 from mailchimp_marketing import Client
 from mailchimp_marketing.api_client import ApiClientError
 
-=======
-from managementAuth import verify_auth0_user
->>>>>>> cff4e4ea5b31750fca1e814eaa4cbc0e89a9b513
+from managmentAuth import verify_auth0_user
 
 app = Flask(__name__)
 CORS(app)
 # Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017")
 db = client["americanRedCrossDB"]
-<<<<<<< HEAD
 
 
 # Mailchimp Configuration
@@ -60,8 +56,6 @@ def signup():
     except Exception as e:
         print(f"Signup error: {e}")
         return jsonify({"error": "Signup failed due to an unexpected error."}), 500
-=======
->>>>>>> cff4e4ea5b31750fca1e814eaa4cbc0e89a9b513
 
 @app.route("/hospital/data", methods=["GET"])
 def hospital_data_endpoint():
